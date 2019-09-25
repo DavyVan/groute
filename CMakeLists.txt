@@ -2,9 +2,10 @@ cmake_minimum_required (VERSION 2.8)
 project (groute)
 
 ############## DEPENDENCIES ##############
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+#set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-find_package(CUDA 7 REQUIRED)
+#find_package(CUDA 10 REQUIRED)
+find_package(CUDA)
 
 # GFlags
 add_subdirectory(deps/gflags)
@@ -49,7 +50,8 @@ include_directories(${PROJECT_SOURCE_DIR}/deps/cub)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} ${CUDA_TOOLKIT_TARGET_DIR}/lib64/stubs/libcuda.so ${CUDA_TOOLKIT_TARGET_DIR}/lib64/libnvToolsExt.so)
+#set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} ${CUDA_TOOLKIT_TARGET_DIR}/lib64/stubs/libcuda.so ${CUDA_TOOLKIT_TARGET_DIR}/lib64/libnvToolsExt.so)
+set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/libnvToolsExt.so)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Debug mode")

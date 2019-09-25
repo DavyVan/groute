@@ -65,3 +65,6 @@ build/
 */*-build/
 */*build*/
 metis/
+graphs/
+*.graph
+metis
