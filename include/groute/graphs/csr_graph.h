@@ -43,6 +43,7 @@
 
 DECLARE_bool(verbose);
 DECLARE_bool(pn);
+DECLARE_int32(parmode);
 
 typedef uint32_t index_t;
 
@@ -631,6 +632,30 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        // FQ
+        class NaivePartitioner : public GraphPartitioner    // copied from MetisPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            NaivePartitioner(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
         /*
         * @brief A multi-GPU graph segment allocator (allocates a graph segment over each GPU)
         */
@@ -650,9 +675,24 @@ namespace graphs {
             CSRGraphAllocator(groute::Context& context, host::CSRGraph& host_graph, int ngpus) :
                 m_context(context), m_ngpus(ngpus)
             {
-                m_partitioner = FLAGS_pn && (m_ngpus > 1)
-                    ? (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitioner>(new MetisPartitioner(host_graph, ngpus))
-                    : (std::unique_ptr<GraphPartitioner>) std::unique_ptr<RandomPartitioner>(new RandomPartitioner(host_graph, ngpus));
+                // m_partitioner = FLAGS_pn && (m_ngpus > 1)
+                //     ? (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitioner>(new MetisPartitioner(host_graph, ngpus))
+                //     : (std::unique_ptr<GraphPartitioner>) std::unique_ptr<RandomPartitioner>(new RandomPartitioner(host_graph, ngpus));
+                if (FLAGS_pn && m_ngpus > 1)
+                {
+                    if (FLAGS_parmode == 0)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<NaivePartitioner>(new NaivePartitioner(host_graph, ngpus));
+                    }
+                    else if (FLAGS_parmode == 1)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitioner>(new MetisPartitioner(host_graph, ngpus));
+                    }
+                }
+                else
+                {
+                    m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<RandomPartitioner>(new RandomPartitioner(host_graph, ngpus));
+                }
 
                 m_dev_segs.resize(m_ngpus);
 
@@ -1151,7 +1191,7 @@ namespace graphs {
                 datum_seg.size = 0;
             }
         };
-    }
+    }       // namespace multi
 
     namespace single
     {
@@ -1350,7 +1390,7 @@ namespace graphs {
                 return m_dev_datum;
             }
         };
-    }
+    }   // namespace single
 }
 }
 

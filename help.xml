@@ -1,0 +1,128 @@
+pr: Warning: SetUsageMessage() never called
+
+  Flags from /home/eeres/qufan/groute/deps/gflags/src/gflags.cc:
+    -flagfile (load flags from file) type: string default: ""
+    -fromenv (set flags from the environment [use 'export FLAGS_flag1=value'])
+      type: string default: ""
+    -tryfromenv (set flags from the environment if present) type: string
+      default: ""
+    -undefok (comma-separated list of flag names that it is okay to specify on
+      the command line even if the program does not define a flag with that
+      name.  IMPORTANT: flags in this list that have arguments MUST use the
+      flag=value format) type: string default: ""
+
+  Flags from /home/eeres/qufan/groute/deps/gflags/src/gflags_completions.cc:
+    -tab_completion_columns (Number of columns to use in output for tab
+      completion) type: int32 default: 80
+    -tab_completion_word (If non-empty, HandleCommandLineCompletions() will
+      hijack the process and attempt to do bash-style command line flag
+      completion on this value.) type: string default: ""
+
+  Flags from /home/eeres/qufan/groute/deps/gflags/src/gflags_reporting.cc:
+    -help (show help on all flags [tip: all flags can have two dashes])
+      type: bool default: false
+    -helpfull (show help on all flags -- same as -help) type: bool
+      default: false currently: true
+    -helpmatch (show help on modules whose name contains the specified substr)
+      type: string default: ""
+    -helpon (show help on the modules named by this flag value) type: string
+      default: ""
+    -helppackage (show help on all modules in the main package) type: bool
+      default: false
+    -helpshort (show help on only the main module for this program) type: bool
+      default: false
+    -helpxml (produce an xml version of help) type: bool default: false
+      currently: true
+    -version (show version and build info and exit) type: bool default: false
+
+
+
+  Flags from /home/eeres/qufan/groute/include/groute/graphs/fused_solver.h:
+    -fused_chunk_size (Intermediate peer transfer) type: int32
+      default: 2147483647
+
+
+
+  Flags from /home/eeres/qufan/groute/include/utils/app_skeleton.h:
+    -all (Run all variants) type: bool default: false
+    -async_multi (Run the async multigpu variant) type: bool default: true
+    -block_size (Block size for traversal kernels) type: int32 default: 256
+    -cached_events (Number of events to cache in each event pool (per device))
+      type: int32 default: 8
+    -check (Check results) type: bool default: false
+    -cmdfile (A file with commands to execute) type: string default: ""
+    -count_work (Count the work-items performed by each individual GPU)
+      type: bool default: false
+    -cta_np (Use nested parallelism withing traversal kernels) type: bool
+      default: true
+    -debug_print (Print detailed debug info) type: bool default: false
+    -fragment_size (Fragment size for all memcpy operations) type: int32
+      default: -1
+    -gen_factor (A factor number for graph generation) type: int32 default: 10
+    -gen_graph (Generate a random graph) type: bool default: false
+    -gen_method (Select the requested graph generation method: 
+      	0: Random graph 
+      	1: Two-way chain graph without segment intersection 
+      	2: Two-way chain graph with intersection 
+      	3: Full cliques per device without segment intersection) type: int32
+      default: 0
+    -gen_nnodes (Number of nodes for random graph generation) type: int32
+      default: 100000
+    -gen_weight_range (The range to generate edge weights from (coordinate this
+      parameter with nf-delta if running sssp-nf)) type: int32 default: 100
+    -gen_weights (Generate edge weights if missing in graph input) type: bool
+      default: false
+    -ggr (Graph file is a Galois binary GR file) type: bool default: true
+    -graphfile (A file with a graph in Dimacs 10 format) type: string
+      default: ""
+    -high_priority_receive (Use a high priority stream for split receive)
+      type: bool default: true
+    -interactive (Run an interactive session) type: bool default: false
+    -iteration_fusion (Fuse multiple iterations (FusedWork kernel performs one
+      iteration each launch if this is false)) type: bool default: true
+    -num_gpus (Override number of GPUs (or negative to use the amount of
+      available GPUs)) type: int32 default: 2
+    -opt (Run the optimized (prio + fusion) async multigpu variant) type: bool
+      default: true
+    -output (File to store output to) type: string default: ""
+    -pipe_alloc_factor (Each socket pipeline buffer will allocate 'nnodes'
+      times this factor) type: double default: 0.050000000000000003
+    -pipe_alloc_size (Each socket pipeline buffer will allocate
+      'pipe_alloc_size' items per buffer) type: int32 default: -1
+    -pipe_size (Each socket pipeline will allocate 'pipe_size' buffers)
+      type: int32 default: -1
+    -pipe_size_factor (Each socket pipeline will allocate 'ngpus' times this
+      factor buffers) type: double default: 4
+    -pn (Partition the input graph using METIS (requires a symmetric graph))
+      type: bool default: true
+    -prio_delta (The soft priority delta) type: int32 default: 10
+    -repetitions (Repetitions of GPU tests) type: int32 default: 1
+    -single (Run the single GPU variant) type: bool default: false
+    -startwith (Start with a specific number of GPUs) type: int32 default: 1
+    -stats (Print graph statistics and exit) type: bool default: false
+    -verbose (Verbose prints) type: bool default: false
+    -warp_append (Use warp aggregated operations for worklist append's)
+      type: bool default: true
+    -wl_alloc_abs (Absolute size for local worklists (if not zero, overrides
+      --wl_alloc_factor) type: uint64 default: 0
+    -wl_alloc_factor (Local worklists will allocate '(nedges / ngpus)' times
+      this factor) type: double default: 0.20000000000000001
+    -wl_alloc_factor_in (Worklist allocation factor: incoming worklist)
+      type: double default: 0.40000000000000002
+    -wl_alloc_factor_local (Worklist allocation factor: local worklist)
+      type: double default: 0.20000000000000001
+    -wl_alloc_factor_out (Worklist allocation factor: outgoing worklist)
+      type: double default: 0.20000000000000001
+    -wl_alloc_factor_pass (Worklist allocation factor: pass-through worklist)
+      type: double default: 0.20000000000000001
+    -work_subseg (A parameter for breaking the actual workload of the algorithm
+      into sub-segments) type: uint64 default: 0
+
+
+
+  Flags from /home/eeres/qufan/groute/samples/pr/pr_host.cpp:
+    -max_pr_iterations (The maximum number of PR iterations) type: int32
+      default: 200
+    -print_ranks (Write out ranks to output) type: bool default: false
+    -top_ranks (The number of top ranks to compare for PR regression)
+      type: int32 default: 10

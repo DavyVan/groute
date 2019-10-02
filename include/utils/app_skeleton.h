@@ -111,6 +111,7 @@ DEFINE_int32(gen_weight_range, 100, "The range to generate edge weights from (co
 
 #ifdef HAVE_METIS
 DEFINE_bool(pn, true, "Partition the input graph using METIS (requires a symmetric graph)");
+DEFINE_int32(parmode, 1, "Partitioning mode:\n\t0: Naive vertex partitioning\n\t1: METIS default (without weights)\n\t2: METIS with weights as v's degree\n\t3: TBD");
 #else
 DEFINE_bool(pn, false, "[BINARY NOT BUILT WITH METIS] Partition the input graph using METIS (requires a symmetric graph)");
 #endif
