@@ -32,6 +32,7 @@
 
 #include <unordered_set>
 #include <groute/graphs/csr_graph.h>
+#include <cmath>
 
 namespace groute {
 namespace graphs {
@@ -220,7 +221,7 @@ namespace graphs {
             printf("\nWARNING: Binary not built with METIS support. Exiting.\n");
             exit(100);
 #else
-            printf("\nStarting METIS partitioning\n");
+            printf("\nStarting naive partitioning\n");
 
             idx_t nnodes = m_origin_graph.nnodes;
             idx_t nedges = m_origin_graph.nedges;
@@ -262,14 +263,23 @@ namespace graphs {
 
             // FQ: we only need to modify partition_table
             idx_t nnodes_per_seg = nnodes / nparts;
+            idx_t _t = 0;
             for (idx_t i = 0; i < nnodes; i++)
             {
-                partition_table[i] = i / nnodes_per_seg;
+                _t = i / nnodes_per_seg;
+                if (_t >= nparts-1)
+                    partition_table[i] = nparts-1;
+                else
+                    partition_table[i] = i / nnodes_per_seg;
                 // printf("%d", partition_table[i]);
             }
 
+            for (idx_t i = 0; i < 10; i++)
+                printf("%d", partition_table[i]);
+
             printf("Building partitioned graph and lookup tables\n");
 
+            // FQ: This struct store the relation between node ID and it partition ID
             struct node_partition {
                     index_t node;
                     index_t partition;
@@ -282,13 +292,15 @@ namespace graphs {
                     }
             };
 
-            std::vector<node_partition> node_partitions(nnodes);
+            std::vector<node_partition> node_partitions(nnodes);    // FQ: allocate 1 such struct for every node
 
+            // FQ: init the data
             for (index_t node = 0; node < nnodes; ++node)
             {
                 node_partitions[node] = node_partition(node, partition_table[node]);
             }
 
+            // FQ: sort, put nodes belong to one partition together
             std::stable_sort(node_partitions.begin(), node_partitions.end());
 
             if (m_origin_graph.edge_weights != nullptr)
@@ -298,16 +310,18 @@ namespace graphs {
 
             int current_seg = -1;
 
+            // FQ: reorganize partitioned graph in CSR
             for (index_t new_nidx = 0, edge_pos = 0; new_nidx < nnodes; ++new_nidx)
             {
                 int seg = node_partitions[new_nidx].partition;
                 while (seg > current_seg) // if this is true we have crossed the border to the next seg (looping with while just in case)
                 {
-                    m_seg_offsets[++current_seg] = new_nidx;
+                    m_seg_offsets[++current_seg] = new_nidx;    // FQ: record the boundary node, the first node in seg
                 }
 
+                // FQ: construct a lookup table between old and new node ID, because we sort the node_partitions
                 index_t origin_nidx = node_partitions[new_nidx].node; 
-                m_reverse_lookup[origin_nidx] = new_nidx;
+                m_reverse_lookup[origin_nidx] = new_nidx;       
 
                 index_t edge_start = m_origin_graph.row_start[origin_nidx];
                 index_t edge_end = m_origin_graph.row_start[origin_nidx+1];

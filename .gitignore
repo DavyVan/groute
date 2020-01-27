@@ -68,3 +68,4 @@ metis/
 graphs/
 *.graph
 metis
+.vscode/
