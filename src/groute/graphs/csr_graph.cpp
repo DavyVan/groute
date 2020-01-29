@@ -393,12 +393,16 @@ namespace graphs {
             idx_t edgecut;
             std::vector<idx_t> partition_table(nnodes);
 
+            printf("1..");
+
             // Convert to 64-bit for metis
             std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
             for (int i = 0; i < nnodes + 1; ++i)
                 row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
+            printf("2..");
             for (int i = 0; i < nedges; ++i)
                 edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
+            printf("3..");
             if(m_origin_graph.edge_weights)
             {
                 edge_weights.resize(nedges);
