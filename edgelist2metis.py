@@ -21,7 +21,7 @@ def main():
 
     # read file
     print("Reading file...")
-    edgelist = pd.read_csv(inputfile, delim_whitespace=True, header=None)
+    edgelist = pd.read_csv(inputfile, delim_whitespace=True, header=None, comment='#')
 
     # to coo, then csr
     print("Construct COO and convert to CSR...")
