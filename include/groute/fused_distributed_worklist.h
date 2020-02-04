@@ -497,13 +497,13 @@ namespace groute {
                 void* mem_buffer;
                 size_t mem_size;
 
-                mem_buffer = context.Alloc(0.3, mem_size, AF_PO2);
+                mem_buffer = context.Alloc(0.4, mem_size, AF_PO2);  // 0.3
                 m_remote_input_worklist = groute::CircularWorklist<TLocal>((TLocal*)mem_buffer, mem_size / sizeof(TLocal));
 
-                mem_buffer = context.Alloc(0.15, mem_size, AF_PO2);
+                mem_buffer = context.Alloc(0.20, mem_size, AF_PO2); // 0.15
                 m_send_remote_output_worklist = groute::CircularWorklist<TRemote>((TRemote*)mem_buffer, mem_size / sizeof(TRemote));
 
-                mem_buffer = context.Alloc(0.15, mem_size, AF_PO2);
+                mem_buffer = context.Alloc(0.20, mem_size, AF_PO2); // 0.15
                 m_pass_remote_output_worklist = groute::CircularWorklist<TRemote>((TRemote*)mem_buffer, mem_size / sizeof(TRemote));
 
                 m_remote_input_worklist.ResetAsync((cudaStream_t)0);
