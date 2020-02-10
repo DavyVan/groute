@@ -443,7 +443,7 @@ namespace graphs {
                     result == METIS_ERROR_INPUT ? "input" : result == METIS_ERROR_MEMORY ? "memory" : "general");
                 exit(0);
             }
-            free(vdegrees);
+            // free(vdegrees);
 
             printf("Building partitioned graph and lookup tables\n");
 
