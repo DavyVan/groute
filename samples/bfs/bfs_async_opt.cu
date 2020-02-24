@@ -416,7 +416,7 @@ namespace bfs {
             template<typename...UnusedData>
             static std::vector<level_t> Host(groute::graphs::host::CSRGraph& graph, UnusedData&... data)
             {
-                return BFSHost(graph, std::min(std::max(0, FLAGS_source_node), graph.nnodes - 1));
+                return BFSHost(graph, std::min((index_t)std::max(0, FLAGS_source_node), graph.nnodes - 1));
             }
 
             static int Output(const char *file, const std::vector<level_t>& levels)
