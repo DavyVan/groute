@@ -36,7 +36,7 @@
 
 #include <groute/graphs/csr_graph.h>
 
-typedef uint32_t distance_t;
+typedef uint64_t distance_t;
 extern const distance_t INF;
 
 std::vector<distance_t> SSSPHostNaive(groute::graphs::host::CSRGraph& graph, distance_t* edge_weights, index_t source_node);
