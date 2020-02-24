@@ -173,7 +173,7 @@ namespace sssp
                     index_t dest = graph.edge_dest(edge);
                     distance_t weight = edge_weights.get_item(edge);
 
-                    if (distance + weight < atomicMin(node_distances.get_item_ptr(dest), distance + weight))
+                    if (distance + weight < atomicMin((unsigned long long*)node_distances.get_item_ptr(dest), (unsigned long long)(distance + weight)))
                     {
                         work_target.append_work(graph, dest);
                     }
@@ -206,7 +206,7 @@ namespace sssp
                 index_t dest = graph.edge_dest(edge);
                 distance_t weight = edge_weights.get_item(edge);
 
-                if (distance + weight < atomicMin(node_distances.get_item_ptr(dest), distance + weight))
+                if (distance + weight < atomicMin((unsigned long long*)node_distances.get_item_ptr(dest), (unsigned long long)(distance + weight)))
                 {
                     work_target.append_work(graph, dest);
                 }
@@ -251,7 +251,7 @@ namespace sssp
                     index_t dest = graph.edge_dest(edge);
                     distance_t weight = edge_weights.get_item(edge);
 
-                    if (distance + weight < atomicMin(node_distances.get_item_ptr(dest), distance + weight))
+                    if (distance + weight < atomicMin((unsigned long long*)node_distances.get_item_ptr(dest), (unsigned long long)(distance + weight)))
                     {
                         if (graph.owns(dest))
                         {
@@ -308,7 +308,7 @@ namespace sssp
                 index_t dest = graph.edge_dest(edge);
                 distance_t weight = edge_weights.get_item(edge);
 
-                if (distance + weight < atomicMin(node_distances.get_item_ptr(dest), distance + weight))
+                if (distance + weight < atomicMin((unsigned long long*)node_distances.get_item_ptr(dest), (unsigned long long)(distance + weight)))
                 {
                     if (graph.owns(dest))
                     {
@@ -392,7 +392,7 @@ namespace sssp
         {
             if (m_graph_seg.owns(work.node))
             {
-                return (work.distance < atomicMin(m_distances_datum.get_item_ptr(work.node), work.distance))
+                return (work.distance < atomicMin((unsigned long long *)m_distances_datum.get_item_ptr(work.node), (unsigned long long)work.distance))
                     ? groute::SF_Take
                     : groute::SF_None; // filter
             }
@@ -447,7 +447,7 @@ namespace sssp
         
         void Init(groute::Worklist<index_t>& in_wl, groute::Stream& stream) const
         {
-            index_t source_node = std::min(std::max(0, FLAGS_source_node), m_graph.nnodes - 1);
+            index_t source_node = std::min((index_t)std::max(0, FLAGS_source_node), m_graph.nnodes - 1);
 
             dim3 grid_dims, block_dims;
             KernelSizing(grid_dims, block_dims, m_distances_datum.size);
