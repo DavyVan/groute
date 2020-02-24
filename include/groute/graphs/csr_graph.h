@@ -87,6 +87,7 @@ namespace graphs {
             {
                 row_start = &row_start_vec[0];
                 edge_dst = &edge_dst_vec[0];
+                printf("CSRGraphBase::edge_dist size is %d\n", edge_dst_vec.size());
             }
 
             CSRGraph() : edge_weights(nullptr), node_weights(nullptr) { }

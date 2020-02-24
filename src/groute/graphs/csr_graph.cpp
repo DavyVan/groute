@@ -67,6 +67,7 @@ namespace graphs {
                 row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
 
             printf("2.."); fflush(stdout);
+            // printf("edge_dst_size=%d..")
             for (int i = 0; i < nedges; ++i)
                 edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
 
