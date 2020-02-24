@@ -63,19 +63,19 @@ namespace graphs {
 
             // Convert to 64-bit for metis
             std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
-            for (int i = 0; i < nnodes + 1; ++i)
+            for (uint64_t i = 0; i < nnodes + 1; ++i)
                 row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
 
             printf("2.."); fflush(stdout);
             // printf("edge_dst_size=%d..")
-            for (int i = 0; i < nedges; ++i)
+            for (uint64_t i = 0; i < nedges; ++i)
                 edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
 
             printf("3.."); fflush(stdout);
             if(m_origin_graph.edge_weights)
             {
                 edge_weights.resize(nedges);
-                for (int i = 0; i < nedges; ++i)
+                for (uint64_t i = 0; i < nedges; ++i)
                     edge_weights[i] = static_cast<idx_t>(m_origin_graph.edge_weights[i]);
             }
             printf("Converted graph to %d-bit, calling METIS\n", (int)IDXTYPEWIDTH);
