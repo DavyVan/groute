@@ -386,7 +386,7 @@ namespace bfs {
                 groute::router::Router<remote_work_t>& worklist_router,
                 groute::opt::DistributedWorklist<local_work_t, remote_work_t, bfs::opt::SplitOps>& distributed_worklist)
             {
-                index_t source_node = min(max(0, FLAGS_source_node), context.host_graph.nnodes - 1);
+                index_t source_node = std::min(std::max(0, FLAGS_source_node), context.host_graph.nnodes - 1);
 
                 auto partitioner = graph_manager.GetGraphPartitioner();
                 if (partitioner->NeedsReverseLookup())
@@ -416,7 +416,7 @@ namespace bfs {
             template<typename...UnusedData>
             static std::vector<level_t> Host(groute::graphs::host::CSRGraph& graph, UnusedData&... data)
             {
-                return BFSHost(graph, min(max(0, FLAGS_source_node), graph.nnodes - 1));
+                return BFSHost(graph, std::min(std::max(0, FLAGS_source_node), graph.nnodes - 1));
             }
 
             static int Output(const char *file, const std::vector<level_t>& levels)
