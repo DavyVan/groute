@@ -397,7 +397,7 @@ namespace sssp {
                 groute::router::Router<remote_work_t>& worklist_router,
                 groute::opt::DistributedWorklist<local_work_t, remote_work_t, SplitOps>& distributed_worklist)
             {
-                index_t source_node = std::min(std::max(0, FLAGS_source_node), context.host_graph.nnodes - 1);
+                index_t source_node = std::min((index_t)std::max(0, FLAGS_source_node), context.host_graph.nnodes - 1);
 
                 auto partitioner = graph_manager.GetGraphPartitioner();
                 if (partitioner->NeedsReverseLookup())
@@ -438,7 +438,7 @@ namespace sssp {
                 TWeightDatum<distance_t>& weights_datum, TDistanceDatum<distance_t>& distances_datum,
                 UnusedData&... data)
             {
-                return SSSPHostNaive(graph, weights_datum.GetHostDataPtr(), std::min(std::max(0, FLAGS_source_node), graph.nnodes - 1));
+                return SSSPHostNaive(graph, weights_datum.GetHostDataPtr(), std::min((index_t)std::max(0, FLAGS_source_node), graph.nnodes - 1));
             }
 
             static int Output(const char *file, const std::vector<distance_t>& distances)

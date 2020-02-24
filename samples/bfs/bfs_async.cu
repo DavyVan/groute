@@ -269,7 +269,7 @@ namespace bfs
 
         void Init(groute::Worklist<index_t>& in_wl, groute::Stream& stream) const
         {
-            index_t source_node = std::min(std::max(0, FLAGS_source_node), m_graph.nnodes - 1);
+            index_t source_node = std::min((index_t)std::max(0, FLAGS_source_node), m_graph.nnodes - 1);
 
             dim3 grid_dims, block_dims;
             KernelSizing(grid_dims, block_dims, m_levels_datum.size);
@@ -356,7 +356,7 @@ namespace bfs
         template<typename...UnusedData>
         static std::vector<level_t> Host(groute::graphs::host::CSRGraph& graph, UnusedData&... data)
         {
-            return BFSHost(graph, std::min(std::max(0, FLAGS_source_node), graph.nnodes - 1));
+            return BFSHost(graph, std::min((index_t)std::max(0, FLAGS_source_node), graph.nnodes - 1));
         }
 
         static int Output(const char *file, const std::vector<level_t>& levels)
