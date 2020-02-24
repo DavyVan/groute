@@ -45,7 +45,7 @@ DECLARE_bool(verbose);
 DECLARE_bool(pn);
 DECLARE_int32(parmode);
 
-typedef uint32_t index_t;
+typedef uint64_t index_t;
 
 
 namespace groute {

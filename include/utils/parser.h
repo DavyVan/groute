@@ -28,7 +28,7 @@
 #define SCIDX  "ld"
 #define PRIDX  "I32d"
 
-typedef uint32_t idx_t;
+typedef uint64_t idx_t;
 typedef float real_t;
 typedef uint64_t size_t;
 
