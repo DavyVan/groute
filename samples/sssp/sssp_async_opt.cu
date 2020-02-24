@@ -116,7 +116,7 @@ namespace sssp {
                             index_t dest = graph.edge_dest(edge);
                             distance_t weight = edge_weights.get_item(edge);
 
-                            if (distance + weight < atomicMin(node_distances.get_item_ptr(dest), distance + weight))
+                            if (distance + weight < atomicMin((unsigned long long*)node_distances.get_item_ptr(dest), (unsigned long long)(distance + weight)))
                             {
                                 int is_owned = graph.owns(dest);
 
@@ -173,7 +173,7 @@ namespace sssp {
                         index_t dest = graph.edge_dest(edge);
                         distance_t weight = edge_weights.get_item(edge);
 
-                        if (distance + weight < atomicMin(node_distances.get_item_ptr(dest), distance + weight))
+                        if (distance + weight < atomicMin((unsigned long long*)node_distances.get_item_ptr(dest), (unsigned long long)(distance + weight)))
                         {
                             int is_owned = graph.owns(dest);
 
@@ -221,7 +221,7 @@ namespace sssp {
             {
                 if (m_graph_seg.owns(work.node))
                 {
-                    return (work.distance < atomicMin(m_distances_datum.get_item_ptr(work.node), work.distance))
+                    return (work.distance < atomicMin((unsigned long long *)m_distances_datum.get_item_ptr(work.node), (unsigned long long)work.distance))
                         ? groute::opt::SF_Take
                         : groute::opt::SF_None; // filter
                 }
