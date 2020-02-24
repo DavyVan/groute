@@ -60,28 +60,28 @@ namespace graphs {
             idx_t edgecut;
             std::vector<idx_t> partition_table(nnodes);
 
-            // Convert to 64-bit for metis
-            // std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
-            // for (uint32_t i = 0; i < nnodes + 1; ++i)
-            //     row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
-            // for (uint32_t i = 0; i < nedges; ++i)
-            //     edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
-            // if(m_origin_graph.edge_weights)
-            // {
-            //     edge_weights.resize(nedges);
-            //     for (uint32_t i = 0; i < nedges; ++i)
-            //         edge_weights[i] = static_cast<idx_t>(m_origin_graph.edge_weights[i]);
-            // }
+            // Convert to 64-bit for metis, idx_t is defined in metis.h
+            std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
+            for (uint32_t i = 0; i < nnodes + 1; ++i)
+                row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
+            for (uint32_t i = 0; i < nedges; ++i)
+                edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
+            if(m_origin_graph.edge_weights)
+            {
+                edge_weights.resize(nedges);
+                for (uint32_t i = 0; i < nedges; ++i)
+                    edge_weights[i] = static_cast<idx_t>(m_origin_graph.edge_weights[i]);
+            }
             printf("Converted graph to %d-bit, calling METIS\n", (int)IDXTYPEWIDTH);
             
             int result = METIS_PartGraphKway(
                 &nnodes,                      // 
                 &ncons,                       //
-                m_origin_graph.row_start.data(),     //
-                m_origin_graph.edge_dst.data(),      //
+                row_start.data(),     //
+                edge_dst.data(),      //
                 NULL,                         // vwgt
                 NULL,                         // vsize
-                m_origin_graph.edge_weights ? m_origin_graph.edge_weights.data() : nullptr,  // adjwgt
+                m_origin_graph.edge_weights ? edge_weights.data() : nullptr,  // adjwgt
                 &nparts,                      // nparts
                 NULL,                         // tpwgts
                 NULL,                         // ubvec
