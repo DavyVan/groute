@@ -386,7 +386,7 @@ namespace bfs {
                 groute::router::Router<remote_work_t>& worklist_router,
                 groute::opt::DistributedWorklist<local_work_t, remote_work_t, bfs::opt::SplitOps>& distributed_worklist)
             {
-                index_t source_node = std::min(std::max(0, FLAGS_source_node), context.host_graph.nnodes - 1);
+                index_t source_node = std::min((index_t)std::max(0, FLAGS_source_node), context.host_graph.nnodes - 1);
 
                 auto partitioner = graph_manager.GetGraphPartitioner();
                 if (partitioner->NeedsReverseLookup())
