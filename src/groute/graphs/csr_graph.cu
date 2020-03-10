@@ -606,7 +606,7 @@ namespace graphs {
             SpectralClusteringParameter param;
             param.n_clusters = nparts;
             param.n_eig_vects = nparts;
-            param.algorithm = NVGRAPH_MODULARITY_MAXIMIZATION;
+            param.algorithm = NVGRAPH_BALANCED_CUT_LANCZOS;
             param.evs_tolerance = 0.0f; // default
             param.evs_max_iter = 0; // default
             param.kmean_tolerance = 0.0f;   // default
@@ -637,9 +637,9 @@ namespace graphs {
 
             check_status(nvgraphDestroyGraphDescr(handle, graph));
             check_status(nvgraphDestroy(handle));
-            free(edgewgt);
-            free(eigvals);
-            free(eigvec);
+            // free(edgewgt);
+            // free(eigvals);
+            // free(eigvec);
             
             // int result = METIS_PartGraphKway(
             //     &nnodes,                      // 
