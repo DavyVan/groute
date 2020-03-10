@@ -679,6 +679,52 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        class NVGraphPartitioner : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            NVGraphPartitioner(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
+        class NVGraphPartitionerDegreeW : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            NVGraphPartitionerDegreeW(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
         /*
         * @brief A multi-GPU graph segment allocator (allocates a graph segment over each GPU)
         */
@@ -714,6 +760,10 @@ namespace graphs {
                     else if (FLAGS_parmode == 2)
                     {
                         m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerDegreeW>(new MetisPartitionerDegreeW(host_graph, ngpus));
+                    }
+                    else if (FLAGS_parmode == 3)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<NVGraphPartitioner>(new NVGraphPartitioner(host_graph, ngpus));
                     }
                 }
                 else

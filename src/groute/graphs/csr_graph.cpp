@@ -29,6 +29,7 @@
 #ifdef HAVE_METIS
 #include <metis.h>
 #endif
+#include <nvgraph.h>
 
 #include <unordered_set>
 #include <groute/graphs/csr_graph.h>
@@ -531,6 +532,205 @@ namespace graphs {
         }
         
         std::function<index_t(index_t)> MetisPartitionerDegreeW::GetReverseLookupFunc()
+        {
+            return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
+        }
+
+/* --------------------------------- NVGraph -------------------------------- */
+        NVGraphPartitioner::NVGraphPartitioner(host::CSRGraph& origin_graph, int nsegs) : 
+            m_origin_graph(origin_graph), 
+            m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
+            m_reverse_lookup(origin_graph.nnodes), m_seg_offsets(nsegs + 1),
+            m_nsegs(nsegs)
+        {
+            printf("\nStarting NVGraph partitioning with vertex weights (degree)\n");
+
+            int nnodes = m_origin_graph.nnodes;
+            int nedges = m_origin_graph.nedges;
+
+            int ncons = 1;
+            int nparts = m_nsegs;
+
+            printf("0..");
+            fflush(stdout);
+            int edgecut;
+            std::vector<int> partition_table(nnodes);
+
+            printf("1..");
+            fflush(stdout);
+
+            // Convert to int for nvgraph
+            std::vector<int> row_start (nnodes+1), edge_dst (nedges), edge_weights;
+            for (uint32_t i = 0; i < nnodes + 1; ++i)
+                row_start[i] = static_cast<int>(m_origin_graph.row_start[i]);
+            printf("2..");fflush(stdout);
+            for (uint32_t i = 0; i < nedges; ++i)
+                edge_dst[i] = static_cast<int>(m_origin_graph.edge_dst[i]);
+            printf("3..");fflush(stdout);
+            if(m_origin_graph.edge_weights)
+            {
+                edge_weights.resize(nedges);
+                for (uint32_t i = 0; i < nedges; ++i)
+                    edge_weights[i] = static_cast<int>(m_origin_graph.edge_weights[i]);
+            }
+            printf("Converted graph to %d-bit, calling nvgraph...\n", (int)IDXTYPEWIDTH);
+
+            // idx_t *vdegrees = (idx_t*) malloc(sizeof(idx_t) * nnodes);
+            // for (idx_t i = 0; i < nnodes; i++)
+            // {
+            //     vdegrees[i] = m_origin_graph.row_start[i+1] - m_origin_graph.row_start[i];
+            // }
+
+            // printf("Degree computed, calling METIS\n"); 
+
+            nvgraphHandle_t handle;
+            nvgraphGraphDescr_t graph;
+            nvgraphCSRTopology32I_st CSRType;
+            CSRType.nvertices = nnodes;
+            CSRType.nedges = ncons;
+            CSRType.source_offsets = row_start.data();
+            CSRType.destination_indices = edge_dst.data();
+
+            SpectralClusteringParameter param;
+            param.n_clusters = nparts;
+            param.n_eig_vects = nparts;
+            param.algorithm = NVGRAPH_BALANCED_CUT_LANCZOS;
+            
+            cudaDataType_t edge_t = CUDA_R_32I;
+
+            // allocate
+            int *edgewgt, *eigvals, *eigvec;
+            edgewgt = (int*) malloc(sizeof(int) * ncons);
+            eigvals = (int*) malloc(sizeof(int)*nparts);
+            eigvec = (int*) malloc(sizeof(int)*nparts*nnodes);
+            for (uint32_t i = 0; i < ncons; i++)
+            {
+                edgewgt[i] = 1;
+            }
+            printf("prepared...");fflush(stdout);
+
+            check_status(nvgraphCreate(&handle));
+            check_status(nvgraphCreateGraphDescr(handle, &graph));
+            check_status(nvgraphSetGraphStructure(handle, graph, (void*)&CSRType, NVGRAPH_CSR_32));
+            check_status(nvgraphAllocateEdgeData(handle, graph, 1, &edge_t));
+            check_status(nvgraphSetEdgeData(handle, graph, (void*)edgewgt, 0));
+            printf("running...");fflush(stdout);
+            check_status(nvgraphSpectralClustering(handle, graph, 0, &param, &partition_table[0], eigvals, eigvec));
+
+            check_status(nvgraphDestroyGraphDescr(handle, graph));
+            check_status(nvgraphDestroy(handle));
+            free(edgewgt);
+            free(eigvals);
+            free(eigvec);
+            
+            // int result = METIS_PartGraphKway(
+            //     &nnodes,                      // 
+            //     &ncons,                       //
+            //     row_start.data(),     //
+            //     edge_dst.data(),      //
+            //     NULL,                         // vwgt
+            //     NULL,                         // vsize
+            //     m_origin_graph.edge_weights ? edge_weights.data() : nullptr,  // adjwgt
+            //     &nparts,                      // nparts
+            //     NULL,                         // tpwgts
+            //     NULL,                         // ubvec
+            //     NULL,                         // options
+            //     &edgecut,                     // objval
+            //     &partition_table[0]);         // part [out]
+
+            // if (result != METIS_OK) {
+            //     printf(
+            //         "METIS partitioning failed (%s error), Exiting.\n", 
+            //         result == METIS_ERROR_INPUT ? "input" : result == METIS_ERROR_MEMORY ? "memory" : "general");
+            //     exit(0);
+            // }
+            // free(vdegrees);
+
+            printf("Building partitioned graph and lookup tables\n");
+
+            struct node_partition {
+                    index_t node;
+                    index_t partition;
+
+                    node_partition(index_t node, index_t partition) : node(node), partition(partition) {}
+                    node_partition() : node(-1), partition(-1) {}
+
+                    inline bool operator< (const node_partition& rhs) const {
+                        return partition < rhs.partition;
+                    }
+            };
+
+            std::vector<node_partition> node_partitions(nnodes);
+
+            for (index_t node = 0; node < nnodes; ++node)
+            {
+                node_partitions[node] = node_partition(node, partition_table[node]);
+            }
+
+            std::stable_sort(node_partitions.begin(), node_partitions.end());
+
+            if (m_origin_graph.edge_weights != nullptr)
+            {
+                m_partitioned_graph.AllocWeights();
+            }
+
+            int current_seg = -1;
+
+            for (index_t new_nidx = 0, edge_pos = 0; new_nidx < nnodes; ++new_nidx)
+            {
+                int seg = node_partitions[new_nidx].partition;
+                while (seg > current_seg) // if this is true we have crossed the border to the next seg (looping with while just in case)
+                {
+                    m_seg_offsets[++current_seg] = new_nidx;
+                }
+
+                index_t origin_nidx = node_partitions[new_nidx].node; 
+                m_reverse_lookup[origin_nidx] = new_nidx;
+
+                index_t edge_start = m_origin_graph.row_start[origin_nidx];
+                index_t edge_end = m_origin_graph.row_start[origin_nidx+1];
+
+                m_partitioned_graph.row_start[new_nidx] = edge_pos;
+
+                std::copy(m_origin_graph.edge_dst + edge_start, m_origin_graph.edge_dst + edge_end, m_partitioned_graph.edge_dst + edge_pos);
+
+                if (m_origin_graph.edge_weights != nullptr) // copy weights
+                    std::copy(m_origin_graph.edge_weights + edge_start, m_origin_graph.edge_weights + edge_end, m_partitioned_graph.edge_weights + edge_pos);
+
+                edge_pos += (edge_end - edge_start);
+            }
+            
+            while (m_nsegs > current_seg) m_seg_offsets[++current_seg] = nnodes;
+
+            m_partitioned_graph.row_start[nnodes] = nedges;
+            
+            // Map the original destinations, copied from the origin graph to the new index space
+            for (index_t edge = 0; edge < nedges; ++edge)
+            {
+                index_t origin_dest = m_partitioned_graph.edge_dst[edge];
+                m_partitioned_graph.edge_dst[edge] = m_reverse_lookup[origin_dest];
+            }
+
+            printf("NVGraph partitioning done\n");
+        }
+
+        void NVGraphPartitioner::GetSegIndices(
+            int seg_idx,
+            index_t& seg_snode, index_t& seg_nnodes,
+            index_t& seg_sedge, index_t& seg_nedges) const
+        {
+            index_t seg_enode, seg_eedge;
+
+            seg_snode = m_seg_offsets[seg_idx];
+            seg_enode = m_seg_offsets[seg_idx + 1];
+            seg_nnodes = seg_enode - seg_snode;                
+
+            seg_sedge = m_partitioned_graph.row_start[seg_snode];                            // start edge
+            seg_eedge = m_partitioned_graph.row_start[seg_enode];                            // end edge
+            seg_nedges = seg_eedge - seg_sedge;  
+        }
+        
+        std::function<index_t(index_t)> NVGraphPartitioner::GetReverseLookupFunc()
         {
             return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
         }
