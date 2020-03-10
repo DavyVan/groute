@@ -599,7 +599,7 @@ namespace graphs {
             nvgraphGraphDescr_t graph;
             nvgraphCSRTopology32I_st CSRType;
             CSRType.nvertices = nnodes;
-            CSRType.nedges = ncons;
+            CSRType.nedges = nedges;
             CSRType.source_offsets = row_start.data();
             CSRType.destination_indices = edge_dst.data();
 
@@ -637,9 +637,9 @@ namespace graphs {
 
             check_status(nvgraphDestroyGraphDescr(handle, graph));
             check_status(nvgraphDestroy(handle));
-            // free(edgewgt);
-            // free(eigvals);
-            // free(eigvec);
+            free(edgewgt);
+            free(eigvals);
+            free(eigvec);
             
             // int result = METIS_PartGraphKway(
             //     &nnodes,                      // 
