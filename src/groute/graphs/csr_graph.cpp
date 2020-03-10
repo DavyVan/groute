@@ -546,7 +546,7 @@ namespace graphs {
                 exit(0);
             }
         }
-        
+
         NVGraphPartitioner::NVGraphPartitioner(host::CSRGraph& origin_graph, int nsegs) : 
             m_origin_graph(origin_graph), 
             m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
@@ -606,13 +606,13 @@ namespace graphs {
             param.n_eig_vects = nparts;
             param.algorithm = NVGRAPH_BALANCED_CUT_LANCZOS;
             
-            cudaDataType_t edge_t = CUDA_R_32I;
+            cudaDataType_t edge_t = CUDA_R_32F;
 
             // allocate
             int *edgewgt, *eigvals, *eigvec;
-            edgewgt = (int*) malloc(sizeof(int) * ncons);
-            eigvals = (int*) malloc(sizeof(int)*nparts);
-            eigvec = (int*) malloc(sizeof(int)*nparts*nnodes);
+            edgewgt = (float*) malloc(sizeof(float) * ncons);
+            eigvals = (float*) malloc(sizeof(float)*nparts);
+            eigvec = (float*) malloc(sizeof(float)*nparts*nnodes);
             for (uint32_t i = 0; i < ncons; i++)
             {
                 edgewgt[i] = 1;
