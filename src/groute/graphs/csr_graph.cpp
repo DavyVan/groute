@@ -609,7 +609,7 @@ namespace graphs {
             cudaDataType_t edge_t = CUDA_R_32F;
 
             // allocate
-            int *edgewgt, *eigvals, *eigvec;
+            float *edgewgt, *eigvals, *eigvec;
             edgewgt = (float*) malloc(sizeof(float) * ncons);
             eigvals = (float*) malloc(sizeof(float)*nparts);
             eigvec = (float*) malloc(sizeof(float)*nparts*nnodes);
