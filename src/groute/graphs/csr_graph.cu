@@ -606,7 +606,7 @@ namespace graphs {
             SpectralClusteringParameter param;
             param.n_clusters = nparts;
             param.n_eig_vects = nparts;
-            param.algorithm = NVGRAPH_BALANCED_CUT_LANCZOS;
+            param.algorithm = NVGRAPH_MODULARITY_MAXIMIZATION;
             param.evs_tolerance = 0.0f; // default
             param.evs_max_iter = 0; // default
             param.kmean_tolerance = 0.0f;   // default
@@ -621,7 +621,7 @@ namespace graphs {
             eigvec = (float*) malloc(sizeof(float)*nparts*nnodes);
             for (uint32_t i = 0; i < ncons; i++)
             {
-                edgewgt[i] = 1;
+                edgewgt[i] = 1.0;
             }
 
             printf("prepared...");fflush(stdout);
@@ -631,7 +631,7 @@ namespace graphs {
             check_status(nvgraphSetGraphStructure(handle, graph, (void*)&CSRType, NVGRAPH_CSR_32));
             check_status(nvgraphAllocateEdgeData(handle, graph, 1, &edge_t));
             check_status(nvgraphSetEdgeData(handle, graph, (void*)edgewgt, 0));
-            
+
             printf("running...");fflush(stdout);
             check_status(nvgraphSpectralClustering(handle, graph, 0, &param, &partition_table[0], eigvals, eigvec));
 
