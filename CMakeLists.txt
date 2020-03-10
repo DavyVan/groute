@@ -70,7 +70,7 @@ cuda_add_executable(cc src/utils/parser.cpp src/utils/utils.cpp
                     samples/cc/cc_async.cu samples/cc/main.cpp)
 target_link_libraries(cc ${EXTRA_LIBS})
 
-cuda_add_executable(bfs src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp 
+cuda_add_executable(bfs src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cu 
                     samples/bfs/bfs_async.cu samples/bfs/bfs_async_opt.cu
                     samples/bfs/bfs_host.cpp 
 					samples/bfs/main.cpp)
