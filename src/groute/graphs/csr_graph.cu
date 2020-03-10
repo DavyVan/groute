@@ -30,6 +30,8 @@
 #include <metis.h>
 #endif
 #include <nvgraph.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 #include <unordered_set>
 #include <groute/graphs/csr_graph.h>
@@ -621,13 +623,15 @@ namespace graphs {
             {
                 edgewgt[i] = 1;
             }
-            printf("prepared...");fflush(stdout);
 
+            printf("prepared...");fflush(stdout);
+            cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)48*1024*1024*1024);
             check_status(nvgraphCreate(&handle));
             check_status(nvgraphCreateGraphDescr(handle, &graph));
             check_status(nvgraphSetGraphStructure(handle, graph, (void*)&CSRType, NVGRAPH_CSR_32));
             check_status(nvgraphAllocateEdgeData(handle, graph, 1, &edge_t));
             check_status(nvgraphSetEdgeData(handle, graph, (void*)edgewgt, 0));
+            
             printf("running...");fflush(stdout);
             check_status(nvgraphSpectralClustering(handle, graph, 0, &param, &partition_table[0], eigvals, eigvec));
 
