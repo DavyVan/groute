@@ -605,6 +605,10 @@ namespace graphs {
             param.n_clusters = nparts;
             param.n_eig_vects = nparts;
             param.algorithm = NVGRAPH_BALANCED_CUT_LANCZOS;
+            param.evs_tolerance = 0.0f; // default
+            param.evs_max_iter = 0; // default
+            param.kmean_tolerance = 0.0f;   // default
+            param.kmean_max_iter = 0;   // default
             
             cudaDataType_t edge_t = CUDA_R_32F;
 
