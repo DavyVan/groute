@@ -51,7 +51,7 @@ include_directories(${PROJECT_SOURCE_DIR}/deps/cub)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 #set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} ${CUDA_TOOLKIT_TARGET_DIR}/lib64/stubs/libcuda.so ${CUDA_TOOLKIT_TARGET_DIR}/lib64/libnvToolsExt.so)
-set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/libnvToolsExt.so /usr/local/cuda/lib64/stubs/libnvgraph.so)
+set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/libnvToolsExt.so /usr/local/cuda/lib64/libnvgraph.so)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Debug mode")
