@@ -537,6 +537,16 @@ namespace graphs {
         }
 
 /* --------------------------------- NVGraph -------------------------------- */
+        void check_status(nvgraphStatus_t status)
+        {
+            // printf("check status\n");
+            if (status != NVGRAPH_STATUS_SUCCESS)
+            {
+                printf("ERROR : %s\n", nvgraphStatusGetString(status));
+                exit(0);
+            }
+        }
+        
         NVGraphPartitioner::NVGraphPartitioner(host::CSRGraph& origin_graph, int nsegs) : 
             m_origin_graph(origin_graph), 
             m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
