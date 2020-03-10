@@ -616,10 +616,10 @@ namespace graphs {
 
             // allocate
             float *edgewgt, *eigvals, *eigvec;
-            edgewgt = (float*) malloc(sizeof(float) * ncons);
+            edgewgt = (float*) malloc(sizeof(float) * nedges);
             eigvals = (float*) malloc(sizeof(float)*nparts);
             eigvec = (float*) malloc(sizeof(float)*nparts*nnodes);
-            for (uint32_t i = 0; i < ncons; i++)
+            for (uint32_t i = 0; i < nedges; i++)
             {
                 edgewgt[i] = 1.0;
             }
