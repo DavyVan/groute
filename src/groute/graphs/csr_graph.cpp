@@ -210,7 +210,8 @@ namespace graphs {
             return halos_vec;
         }
 
-        // FQ
+/* ---------------------------- Naive Partitioner --------------------------- */
+
         NaivePartitioner::NaivePartitioner(host::CSRGraph& origin_graph, int nsegs) : 
             m_origin_graph(origin_graph), 
             m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
@@ -372,6 +373,8 @@ namespace graphs {
             return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
         }
 
+/* ---------------- Metis Partitioner with weight assignment ---------------- */
+
         MetisPartitionerDegreeW::MetisPartitionerDegreeW(host::CSRGraph& origin_graph, int nsegs) : 
             m_origin_graph(origin_graph), 
             m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
@@ -531,6 +534,242 @@ namespace graphs {
         }
         
         std::function<index_t(index_t)> MetisPartitionerDegreeW::GetReverseLookupFunc()
+        {
+            return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
+        }
+
+/* -------------------------- TB Graph Constructor -------------------------- */
+
+        TBGraphConstructor::TBGraphConstructor(host::CSRGraph& origin_graph, int nsegs) : 
+            m_origin_graph(origin_graph), 
+            m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
+            m_reverse_lookup(origin_graph.nnodes), m_seg_offsets(nsegs + 1),
+            m_nsegs(nsegs)
+        {
+#ifndef HAVE_METIS
+            printf("\nWARNING: Binary not built with METIS support. Exiting.\n");
+            exit(100);
+#else
+            printf("\nStarting TB Graph construction...\n");
+
+            idx_t nnodes = m_origin_graph.nnodes;
+            idx_t nedges = m_origin_graph.nedges;
+
+            idx_t ncons = 1;
+            idx_t nparts = m_nsegs;
+
+            idx_t edgecut;
+            std::vector<idx_t> partition_table(nnodes);
+
+            // Convert to 64-bit for metis
+            std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
+            for (uint32_t i = 0; i < nnodes + 1; ++i)
+                row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
+            for (uint32_t i = 0; i < nedges; ++i)
+                edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
+            if(m_origin_graph.edge_weights)
+            {
+                edge_weights.resize(nedges);
+                for (uint32_t i = 0; i < nedges; ++i)
+                    edge_weights[i] = static_cast<idx_t>(m_origin_graph.edge_weights[i]);
+            }
+            printf("Converted graph to %d-bit, doing TB Graph construction...\n", (int)IDXTYPEWIDTH);
+
+            const idx_t TB_SIZE = 1024;
+            idx_t TB_NUM = std::ceil((float)nnodes / TB_SIZE);    // total number of TBs
+            // new vectors to store TB graph
+            std::vector<idx_t> TB_row_start(TB_NUM+1);
+            std::vector<idx_t> TB_edge_dst;
+            // weights of TB Graph
+            std::vector<idx_t> TB_v_wgt(TB_NUM);
+            std::vector<idx_t> TB_e_wgt;
+            idx_t new_TB_edge_num = 0;
+
+            // for each future TB, scan all its vertex (of original graph)
+            for (idx_t tbid = 0; tbid < TB_NUM; tbid++)
+            {
+                idx_t srcTB = tbid;
+                idx_t current_edge_num = 0;
+
+                // for each vertex of current TB
+                for (idx_t vid = tbid * TB_SIZE; vid < (tbid+1) * TB_SIZE; vid++)
+                {
+                    if (vid >= nnodes)  // could only be true at the last TB
+                        break;
+
+                    // for each edge of current vertex
+                    idx_t start = row_start[vid];
+                    idx_t end = row_start[vid+1];
+                    for (idx_t e = start; e < end; e++)
+                    {
+                        idx_t dstTB = edge_dst[e] / TB_SIZE;
+
+                        if (srcTB == dstTB)
+                        {
+                            // intra-TB edge, w[TB]++
+                            TB_v_wgt[srcTB]++;
+                        }
+                        else
+                        {
+                            // inter-TB edge, add edge if not existed, w[edge]++
+
+                            // check if dstTB has been inserted into TB_edge_dst
+                            idx_t TB_start = TB_row_start[srcTB];
+                            idx_t TB_target_e = -1;
+                            for (idx_t TB_e = TB_start; TB_e < TB_start + current_edge_num; TB_e++)
+                            {
+                                if (TB_edge_dst[TB_e] == dstTB) // found
+                                    TB_target_e = TB_e;
+                            }
+
+                            // if found
+                            if (TB_target_e != -1)
+                            {
+                                TB_e_wgt[TB_target_e]++;
+                            }
+                            else
+                            {
+                                // if not found, insert new TB edge
+                                TB_edge_dst.push_back(dstTB);
+                                TB_e_wgt.push_back((idx_t)1);
+                                current_edge_num++;
+                            }
+                            
+                        }   // end srcTB != dstTB
+                        
+                    }   // end for-loop of e
+                }   // end for-loop of vid
+
+                // update TB index
+                TB_row_start[srcTB+1] = TB_row_start[srcTB] + current_edge_num;
+            }   // end for-loop of tbid
+            printf("TB Graph constructed. It has %d TBs and %d connections.\n", (int)TB_NUM, (int)TB_edge_dst.size());
+
+            exit(0);
+
+            
+            // int result = METIS_PartGraphKway(
+            //     &nnodes,                      // 
+            //     &ncons,                       //
+            //     row_start.data(),     //
+            //     edge_dst.data(),      //
+            //     NULL,                         //
+            //     NULL,                         //
+            //     m_origin_graph.edge_weights ? edge_weights.data() : nullptr,  //
+            //     &nparts,                      //
+            //     NULL,                         //
+            //     NULL,                         //
+            //     NULL,                         //
+            //     &edgecut,                     //
+            //     &partition_table[0]);         //
+
+            // FQ: we only need to modify partition_table
+            idx_t nnodes_per_seg = nnodes / nparts;
+            idx_t _t = 0;
+            for (idx_t i = 0; i < nnodes; i++)
+            {
+                _t = i / nnodes_per_seg;
+                if (_t >= nparts-1)
+                    partition_table[i] = nparts-1;
+                else
+                    partition_table[i] = i / nnodes_per_seg;
+                // printf("%d", partition_table[i]);
+            }
+
+            for (idx_t i = 0; i < 10; i++)
+                printf("%d", partition_table[i]);
+
+            printf("Building partitioned graph and lookup tables\n");
+
+            // FQ: This struct store the relation between node ID and it partition ID
+            struct node_partition {
+                    index_t node;
+                    index_t partition;
+
+                    node_partition(index_t node, index_t partition) : node(node), partition(partition) {}
+                    node_partition() : node(-1), partition(-1) {}
+
+                    inline bool operator< (const node_partition& rhs) const {
+                        return partition < rhs.partition;
+                    }
+            };
+
+            std::vector<node_partition> node_partitions(nnodes);    // FQ: allocate 1 such struct for every node
+
+            // FQ: init the data
+            for (index_t node = 0; node < nnodes; ++node)
+            {
+                node_partitions[node] = node_partition(node, partition_table[node]);
+            }
+
+            // FQ: sort, put nodes belong to one partition together
+            std::stable_sort(node_partitions.begin(), node_partitions.end());
+
+            if (m_origin_graph.edge_weights != nullptr)
+            {
+                m_partitioned_graph.AllocWeights();
+            }
+
+            int current_seg = -1;
+
+            // FQ: reorganize partitioned graph in CSR
+            for (index_t new_nidx = 0, edge_pos = 0; new_nidx < nnodes; ++new_nidx)
+            {
+                int seg = node_partitions[new_nidx].partition;
+                while (seg > current_seg) // if this is true we have crossed the border to the next seg (looping with while just in case)
+                {
+                    m_seg_offsets[++current_seg] = new_nidx;    // FQ: record the boundary node, the first node in seg
+                }
+
+                // FQ: construct a lookup table between old and new node ID, because we sort the node_partitions
+                index_t origin_nidx = node_partitions[new_nidx].node; 
+                m_reverse_lookup[origin_nidx] = new_nidx;       
+
+                index_t edge_start = m_origin_graph.row_start[origin_nidx];
+                index_t edge_end = m_origin_graph.row_start[origin_nidx+1];
+
+                m_partitioned_graph.row_start[new_nidx] = edge_pos;
+
+                std::copy(m_origin_graph.edge_dst + edge_start, m_origin_graph.edge_dst + edge_end, m_partitioned_graph.edge_dst + edge_pos);
+
+                if (m_origin_graph.edge_weights != nullptr) // copy weights
+                    std::copy(m_origin_graph.edge_weights + edge_start, m_origin_graph.edge_weights + edge_end, m_partitioned_graph.edge_weights + edge_pos);
+
+                edge_pos += (edge_end - edge_start);
+            }
+            
+            while (m_nsegs > current_seg) m_seg_offsets[++current_seg] = nnodes;
+
+            m_partitioned_graph.row_start[nnodes] = nedges;
+            
+            // Map the original destinations, copied from the origin graph to the new index space
+            for (index_t edge = 0; edge < nedges; ++edge)
+            {
+                index_t origin_dest = m_partitioned_graph.edge_dst[edge];
+                m_partitioned_graph.edge_dst[edge] = m_reverse_lookup[origin_dest];
+            }
+
+            printf("Naive partitioning done\n");
+#endif
+        }
+
+        void TBGraphConstructor::GetSegIndices(
+            int seg_idx,
+            index_t& seg_snode, index_t& seg_nnodes,
+            index_t& seg_sedge, index_t& seg_nedges) const
+        {
+            index_t seg_enode, seg_eedge;
+
+            seg_snode = m_seg_offsets[seg_idx];
+            seg_enode = m_seg_offsets[seg_idx + 1];
+            seg_nnodes = seg_enode - seg_snode;                
+
+            seg_sedge = m_partitioned_graph.row_start[seg_snode];                            // start edge
+            seg_eedge = m_partitioned_graph.row_start[seg_enode];                            // end edge
+            seg_nedges = seg_eedge - seg_sedge;  
+        }
+        
+        std::function<index_t(index_t)> TBGraphConstructor::GetReverseLookupFunc()
         {
             return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
         }

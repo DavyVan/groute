@@ -3,7 +3,6 @@ project (groute)
 
 ############## DEPENDENCIES ##############
 #set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-
 #find_package(CUDA 10 REQUIRED)
 find_package(CUDA)
 
@@ -55,9 +54,9 @@ set(EXTRA_LIBS gflags_static pthread ${METIS_LIBRARIES} /usr/local/cuda/lib64/st
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Debug mode")
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35;-gencode;arch=compute_37,code=sm_37;-gencode;arch=compute_50,code=sm_50;-gencode;arch=compute_52,code=sm_52;-gencode;arch=compute_52,code=compute_52;-g;-lineinfo;-Xcompiler;-ggdb;-std=c++11)
+  set(CUDA_NVCC_FLAGS -I${PROJECT_SOURCE_DIR}/deps/cub;${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35;-gencode;arch=compute_37,code=sm_37;-gencode;arch=compute_50,code=sm_50;-gencode;arch=compute_52,code=sm_52;-gencode;arch=compute_52,code=compute_52;-g;-lineinfo;-Xcompiler;-ggdb;-std=c++11)
 else()
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35;-gencode;arch=compute_37,code=sm_37;-gencode;arch=compute_50,code=sm_50;-gencode;arch=compute_52,code=sm_52;-gencode;arch=compute_52,code=compute_52;-O3;-DNDEBUG;-Xcompiler;-DNDEBUG;-std=c++11)
+  set(CUDA_NVCC_FLAGS -I${PROJECT_SOURCE_DIR}/deps/cub;${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35;-gencode;arch=compute_37,code=sm_37;-gencode;arch=compute_50,code=sm_50;-gencode;arch=compute_52,code=sm_52;-gencode;arch=compute_52,code=compute_52;-O3;-DNDEBUG;-Xcompiler;-DNDEBUG;-std=c++11)
 endif()
 
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
