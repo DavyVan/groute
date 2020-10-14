@@ -33,6 +33,8 @@
 #include <unordered_set>
 #include <groute/graphs/csr_graph.h>
 #include <cmath>
+#include <ctime>
+#include <fstream>
 
 namespace groute {
 namespace graphs {
@@ -575,6 +577,7 @@ namespace graphs {
             }
             printf("Converted graph to %d-bit, doing TB Graph construction...\n", (int)IDXTYPEWIDTH);
 
+            clock_t start = clock();
             const idx_t TB_SIZE = 1024;
             idx_t TB_NUM = std::ceil((float)nnodes / TB_SIZE);    // total number of TBs
             // new vectors to store TB graph
@@ -584,10 +587,16 @@ namespace graphs {
             std::vector<idx_t> TB_v_wgt(TB_NUM);
             std::vector<idx_t> TB_e_wgt;
             idx_t new_TB_edge_num = 0;
+            idx_t nE = 0;
 
             // for each future TB, scan all its vertex (of original graph)
             for (idx_t tbid = 0; tbid < TB_NUM; tbid++)
             {
+                if (tbid % 10 == 0)
+                {
+                    printf("Processing TB #%lld...edge #%lld\r", tbid, nE);
+                    fflush(stdout);
+                }
                 idx_t srcTB = tbid;
                 idx_t current_edge_num = 0;
 
@@ -600,7 +609,7 @@ namespace graphs {
                     // for each edge of current vertex
                     idx_t start = row_start[vid];
                     idx_t end = row_start[vid+1];
-                    for (idx_t e = start; e < end; e++)
+                    for (idx_t e = start; e < end; e++, nE++)
                     {
                         idx_t dstTB = edge_dst[e] / TB_SIZE;
 
@@ -614,13 +623,13 @@ namespace graphs {
                             // inter-TB edge, add edge if not existed, w[edge]++
 
                             // check if dstTB has been inserted into TB_edge_dst
-                            idx_t TB_start = TB_row_start[srcTB];
                             idx_t TB_target_e = -1;
-                            for (idx_t TB_e = TB_start; TB_e < TB_start + current_edge_num; TB_e++)
-                            {
-                                if (TB_edge_dst[TB_e] == dstTB) // found
-                                    TB_target_e = TB_e;
-                            }
+                            std::vector<idx_t>::iterator TB_e_start = TB_edge_dst.begin() + TB_row_start[srcTB];
+                            std::vector<idx_t>::iterator TB_e_end = TB_e_start + current_edge_num;
+                            std::vector<idx_t>::iterator found = std::lower_bound(TB_e_start, TB_e_end, dstTB);
+                            if (found != TB_e_end && *found == dstTB)    // found
+                                TB_target_e = std::distance(TB_edge_dst.begin(), found);
+                            
 
                             // if found
                             if (TB_target_e != -1)
@@ -630,9 +639,10 @@ namespace graphs {
                             else
                             {
                                 // if not found, insert new TB edge
-                                TB_edge_dst.push_back(dstTB);
-                                TB_e_wgt.push_back((idx_t)1);
                                 current_edge_num++;
+                                TB_target_e = std::distance(TB_edge_dst.begin(), found);
+                                TB_edge_dst.insert(TB_edge_dst.begin()+TB_target_e, dstTB);
+                                TB_e_wgt.insert(TB_e_wgt.begin()+TB_target_e, (idx_t)1);
                             }
                             
                         }   // end srcTB != dstTB
@@ -643,41 +653,184 @@ namespace graphs {
                 // update TB index
                 TB_row_start[srcTB+1] = TB_row_start[srcTB] + current_edge_num;
             }   // end for-loop of tbid
-            printf("TB Graph constructed. It has %d TBs and %d connections.\n", (int)TB_NUM, (int)TB_edge_dst.size());
+            clock_t end = clock();
+            printf("TB Graph has been constructed in %.3f seconds. It has %d TBs and %d connections.\n", (float)(end-start)/CLOCKS_PER_SEC, (int)TB_NUM, (int)TB_edge_dst.size());
 
-            exit(0);
+/* ----------------------------------- CDF ---------------------------------- */
+// #define CDF
+#ifdef CDF
+            // CDF: export the degree of each TB
+            printf("Writing to cdf.txt...\n");
+            std::ofstream fd;
+            fd.open("/data/qfan005/cdf.txt", std::ios::out);    // this file will be read with numpy.fromfile() so directly output the array separated with a whitespace
+            // fd << TB_NUM << std::endl;
+            for (idx_t i = 0; i < TB_NUM; i++)
+            {
+                fd << TB_row_start[i+1] - TB_row_start[i] << " ";
+            }
+            fd.close();
+#endif  
+/* --------------------- Adjacency matrix visualization --------------------- */
+// #define ADJMAT
+#ifdef ADJMAT
+            // AdjMat figure
+            // Will use scipy.sparse.csr_graph to parse the file, so just output (indptr, indices, data)
+            // the first line: <# TBs> <# conns>
+            printf("Writing to adjmat.txt...\n");
+            fd.open("/data/qfan005/adjmat.txt", std::ios::out);
+            fd << TB_NUM << " " << TB_edge_dst.size() << std::endl;
+            // the second line: indptr a.k.a. TB_row_start
+            for (idx_t i = 0; i < TB_NUM+1; i++)
+                fd << TB_row_start[i] << " ";
+            fd << std::endl;
+            // the second line: indices a.k.a. TB_edge_dst
+            for (std::vector<idx_t>::iterator it = TB_edge_dst.begin(); it < TB_edge_dst.end(); it++)
+                fd << *it << " ";
+            fd << std::endl;
+            // the third line: data a.k.a. TB_e_wgt
+            for (std::vector<idx_t>::iterator it = TB_e_wgt.begin(); it < TB_e_wgt.end(); it++)
+                fd << *it << " ";
+            fd << std::endl;
+            fd.close();
+#endif
 
+            // exit(0);
+
+/* --------------------------- Partition TB Graph --------------------------- */
+
+            printf("Partitioning TB Graph with METIS recursive bisection...\n#TB=%lld, #TB=%lld, #wTB=%lld, #Con=%lld, #wCon=%lld\n",
+                TB_row_start.size(), TB_NUM, TB_v_wgt.size(), TB_edge_dst.size(), TB_e_wgt.size());
+            fflush(stdout);
+            std::vector<idx_t> partition_table_TB(TB_NUM);
+            // // increase vertex id by 1, because vertex id starts from 1 rather than 0
             
-            // int result = METIS_PartGraphKway(
-            //     &nnodes,                      // 
-            //     &ncons,                       //
-            //     row_start.data(),     //
-            //     edge_dst.data(),      //
-            //     NULL,                         //
-            //     NULL,                         //
-            //     m_origin_graph.edge_weights ? edge_weights.data() : nullptr,  //
-            //     &nparts,                      //
-            //     NULL,                         //
-            //     NULL,                         //
-            //     NULL,                         //
-            //     &edgecut,                     //
-            //     &partition_table[0]);         //
+            start = clock();
+            int result = METIS_PartGraphRecursive(
+                &TB_NUM,    // nvtxs
+                &ncons,    // ncon, number of weights associated with v
+                TB_row_start.data(),    // xadj
+                TB_edge_dst.data(),     // adjncy
+                NULL,        // vwgt
+                NULL,                   // vsize
+                NULL,        // adjwgt
+                &nparts,                // nparts
+                NULL,
+                NULL,
+                NULL,
+                &edgecut,               // edgecut
+                &partition_table_TB[0]
+            );
+            end = clock();
+            printf("Done, time=%.3f seconds, edgecut=%lld (undirected)\n", (float)(end-start)/CLOCKS_PER_SEC, edgecut);
+            fflush(stdout);
 
-            // FQ: we only need to modify partition_table
-            idx_t nnodes_per_seg = nnodes / nparts;
-            idx_t _t = 0;
+            printf("Constructing partition table for data graph...\n");
+            fflush(stdout);
             for (idx_t i = 0; i < nnodes; i++)
             {
-                _t = i / nnodes_per_seg;
-                if (_t >= nparts-1)
-                    partition_table[i] = nparts-1;
-                else
-                    partition_table[i] = i / nnodes_per_seg;
-                // printf("%d", partition_table[i]);
+                if (i % 10000 == 0)
+                {
+                    printf("%lld\r", i);
+                    fflush(stdout);
+                }
+                idx_t TBid = i / TB_SIZE;
+                partition_table[i] = partition_table_TB[TBid];
             }
 
-            for (idx_t i = 0; i < 10; i++)
-                printf("%d", partition_table[i]);
+            printf("Calculating # of vertices of each partition...\n");
+            std::vector<idx_t> partitions_TB_v(8);
+            for (idx_t i = 0; i < nnodes; i++)
+            {
+                partitions_TB_v[partition_table[i]]++;
+            }
+            for (idx_t i = 0; i < 8; i++)
+                printf("%lld ", partitions_TB_v[i]);
+            printf("\n");
+
+            printf("Calculating # of TBs of each partition...\n");
+            std::vector<idx_t> partitions_TB(8);
+            for (idx_t i = 0; i < TB_NUM; i++)
+            {
+                partitions_TB[partition_table_TB[i]]++;
+            }
+            for (idx_t i = 0; i < 8; i++)
+                printf("%lld ", partitions_TB[i]);
+            printf("\n");
+            // exit(0);
+
+            printf("Calculating edgecut...\n");
+            fflush(stdout);
+            edgecut = 0;
+            for (idx_t i = 0; i < nnodes; i++)
+            {
+                if (i % 10000 == 0)
+                {
+                    printf("%lld\r", i);
+                    fflush(stdout);
+                }
+                    
+                for (idx_t j = row_start[i]; j < row_start[i+1]; j++)
+                {
+                    if (partition_table[i] != partition_table[edge_dst[j]])
+                        edgecut++;
+                }
+            }
+            printf("edgecut=%lld\n", edgecut);
+            fflush(stdout);
+
+            // Comparison: partition data graph directly with METIS k-way
+            printf("Partitioning data graph with METIS k-way...");
+            fflush(stdout);
+            start = clock();
+            result = METIS_PartGraphKway(
+                &nnodes,                      // 
+                &ncons,                       //
+                row_start.data(),     //
+                edge_dst.data(),      //
+                NULL,                         //
+                NULL,                         //
+                nullptr,                      // adjwgt
+                &nparts,                      //
+                NULL,                         //
+                NULL,                         //
+                NULL,                         //
+                &edgecut,                     //
+                &partition_table[0]);         //
+            end = clock();
+            printf("Done, time=%.3f seconds, edgecut=%lld (undirected)\n", (float)(end-start)/CLOCKS_PER_SEC, edgecut);
+            fflush(stdout);
+
+            printf("Calculating edgecut...\n");
+            fflush(stdout);
+            edgecut = 0;
+            for (idx_t i = 0; i < nnodes; i++)
+            {
+                if (i % 10000 == 0)
+                {
+                    printf("%lld\r", i);
+                    fflush(stdout);
+                }
+                    
+                for (idx_t j = row_start[i]; j < row_start[i+1]; j++)
+                {
+                    if (partition_table[i] != partition_table[edge_dst[j]])
+                        edgecut++;
+                }
+            }
+            printf("edgecut=%lld\n", edgecut);
+            fflush(stdout);
+
+            printf("Calculating # of vertices of each partition...\n");
+            std::vector<idx_t> partitions_v(8);
+            for (idx_t i = 0; i < nnodes; i++)
+            {
+                partitions_v[partition_table[i]]++;
+            }
+            for (idx_t i = 0; i < 8; i++)
+                printf("%lld ", partitions_v[i]);
+            printf("\n");
+
+            exit(0);
 
             printf("Building partitioned graph and lookup tables\n");
 
