@@ -182,7 +182,7 @@ namespace bfs
 
         uint32_t work_size = work_source.get_size();
 
-        for (uint32_t i = 0 + tid; i < work_size; i += nthreads)
+        for (uint32_t i = 0 + tid; i < work_size; i += nthreads) //TODO: reverse
         {
             index_t node = work_source.get_work(i);
             level_t next_level = levels_datum.get_item(node) + 1;
@@ -289,6 +289,7 @@ namespace bfs
 
             dim3 grid_dims, block_dims;
             KernelSizing(grid_dims, block_dims, work.GetSegmentSize());
+            // printf("Kernel size: %d\n", work.GetSegmentSize());
 
             if (FLAGS_cta_np)
             {

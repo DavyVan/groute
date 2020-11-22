@@ -44,6 +44,7 @@
 DECLARE_bool(verbose);
 DECLARE_bool(pn);
 DECLARE_int32(parmode);
+DECLARE_string(graphfile);
 
 typedef uint32_t index_t;
 
@@ -702,6 +703,125 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        class RealRandomPartitioner : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            RealRandomPartitioner(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
+        // (3)
+        class MetisPartitionerEW_MaxV : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            MetisPartitionerEW_MaxV(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
+        // (4)
+        class MetisPartitionerEW_LCC : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            MetisPartitionerEW_LCC(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
+        // // (1)(3)
+        // class MetisPartitionerVWEW_MaxV : public GraphPartitioner
+        // {
+        //     host::CSRGraph& m_origin_graph;
+        //     host::CSRGraph m_partitioned_graph;
+        //     std::vector<index_t> m_reverse_lookup;
+        //     std::vector<index_t> m_seg_offsets;
+        //     int m_nsegs;
+
+        // public:
+        //     MetisPartitionerVWEW_MaxV(host::CSRGraph& origin_graph, int nsegs);
+            
+        //     host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+        //     host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+        //     void GetSegIndices(
+        //         int seg_idx,
+        //         index_t& seg_snode, index_t& seg_nnodes,
+        //         index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+        //     bool NeedsReverseLookup() override { return true; }
+        //     std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        // };
+
+        // // (1)(4)
+        // class MetisPartitionerVWEW_LCC : public GraphPartitioner
+        // {
+        //     host::CSRGraph& m_origin_graph;
+        //     host::CSRGraph m_partitioned_graph;
+        //     std::vector<index_t> m_reverse_lookup;
+        //     std::vector<index_t> m_seg_offsets;
+        //     int m_nsegs;
+
+        // public:
+        //     MetisPartitionerVWEW_LCC(host::CSRGraph& origin_graph, int nsegs);
+            
+        //     host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+        //     host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+        //     void GetSegIndices(
+        //         int seg_idx,
+        //         index_t& seg_snode, index_t& seg_nnodes,
+        //         index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+        //     bool NeedsReverseLookup() override { return true; }
+        //     std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        // };
+
         /*
         * @brief A multi-GPU graph segment allocator (allocates a graph segment over each GPU)
         */
@@ -742,6 +862,26 @@ namespace graphs {
                     {
                         m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<TBGraphConstructor>(new TBGraphConstructor(host_graph, ngpus));
                     }
+                    else if (FLAGS_parmode == 4)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<RealRandomPartitioner>(new RealRandomPartitioner(host_graph, ngpus));
+                    }
+                    else if (FLAGS_parmode == 5)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerEW_MaxV>(new MetisPartitionerEW_MaxV(host_graph, ngpus));
+                    }
+                    else if (FLAGS_parmode == 6)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerEW_LCC>(new MetisPartitionerEW_LCC(host_graph, ngpus));
+                    }
+                    // else if (FLAGS_parmode == 7)
+                    // {
+                    //     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerVWEW_MaxV>(new MetisPartitionerVWEW_MaxV(host_graph, ngpus));
+                    // }
+                    // else if (FLAGS_parmode == 8)
+                    // {
+                    //     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerVWEW_LCC>(new MetisPartitionerVWEW_LCC(host_graph, ngpus));
+                    // }
                 }
                 else
                 {

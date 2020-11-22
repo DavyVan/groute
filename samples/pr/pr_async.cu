@@ -263,6 +263,7 @@ namespace pr
         WorkTarget remote_work_target
         )
     {
+        // printf("PR Multi NP\n");
         unsigned tid = TID_1D;
         unsigned nthreads = TOTAL_THREADS_1D;
 
@@ -270,6 +271,7 @@ namespace pr
         uint32_t work_size_rup = round_up(work_size, blockDim.x) * blockDim.x; // we want all threads in active blocks to enter the loop
 
         for (uint32_t i = 0 + tid; i < work_size_rup; i += nthreads)
+        // for (uint32_t i = work_size_rup-tid; i <= UINT_MAX-nthreads; i-= nthreads)  // Notice: unsigned int negative overflow
         {
             groute::dev::np_local<rank_t> np_local = { 0, 0, 0.0 };
 
@@ -336,6 +338,7 @@ namespace pr
         WorkTarget remote_work_target
         )
     {
+        // printf("PR Multi\n");
         unsigned tid = TID_1D;
         unsigned nthreads = TOTAL_THREADS_1D;
 
