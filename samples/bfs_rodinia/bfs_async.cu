@@ -55,7 +55,7 @@ const level_t INF = UINT_MAX;
 #define GTID (blockIdx.x * blockDim.x + threadIdx.x)
 
 
-namespace bfs
+namespace bfs_rodinia
 {
     struct LevelData
     {
@@ -182,12 +182,22 @@ namespace bfs
 
         uint32_t work_size = work_source.get_size();
 
+        // FQ
+        // construct frontier
         for (uint32_t i = 0 + tid; i < work_size; i += nthreads)
         {
             index_t node = work_source.get_work(i);
+            graph.activate(node);
+        }
+
+        // for (uint32_t i = 0 + tid; i < work_size; i += nthreads)
+        for (uint32_t i = 0 + tid; i < graph.owned_nnodes(); i += nthreads)
+        {
+            index_t node = i + graph.nodes_offset;
+            if (!graph.is_active(node))
+                continue;
             level_t next_level = levels_datum.get_item(node) + 1;
 
-            // TODO: Measure the execution time (t=ax+y?)
             for (index_t edge = graph.begin_edge(node), end_edge = graph.end_edge(node); edge < end_edge; ++edge)
             {
                 index_t dest = graph.edge_dest(edge);
@@ -283,7 +293,7 @@ namespace bfs
             in_wl.AppendItemAsync(stream.cuda_stream, source_node); // add the first item to the worklist
         }
 
-        // TODO:
+        // TODO: sorting
         // define a kernel ?
 
         template<typename TWorklist, bool WarpAppend = true>
@@ -291,8 +301,15 @@ namespace bfs
         {
             if (work.Empty()) return;
 
+            // FQ
+            if (m_graph.frontier == nullptr)
+            {
+                GROUTE_CUDA_CHECK(cudaMalloc(&m_graph.frontier, m_graph.owned_nnodes() * sizeof(char)));
+            }
+            GROUTE_CUDA_CHECK(cudaMemset(m_graph.frontier, 0, m_graph.owned_nnodes() * sizeof(char)));
+
             dim3 grid_dims, block_dims;
-            KernelSizing(grid_dims, block_dims, work.GetSegmentSize()); // should be #edges if NP
+            KernelSizing(grid_dims, block_dims, m_graph.owned_nnodes()); // fixed #threads
             // printf("Kernel size: %d\n", work.GetSegmentSize());
 
             // caculate the degrees !!! pointer to input graph
@@ -330,7 +347,7 @@ namespace bfs
         static const char* Name()           { return "BFS"; }
 
         static void Init(
-            groute::graphs::traversal::Context<bfs::Algo>& context,
+            groute::graphs::traversal::Context<bfs_rodinia::Algo>& context,
             groute::graphs::multi::CSRGraphAllocator& graph_manager,
             groute::router::Router<remote_work_t>& worklist_router,
             groute::DistributedWorklist<local_work_t, remote_work_t>& distributed_worklist)
@@ -382,15 +399,15 @@ namespace bfs
 
 bool TestBFSAsyncMulti(int ngpus)
 {
-    typedef bfs::Problem<groute::graphs::dev::CSRGraphSeg, groute::graphs::dev::GraphDatum<level_t>> Problem;
+    typedef bfs_rodinia::Problem<groute::graphs::dev::CSRGraphSeg, groute::graphs::dev::GraphDatum<level_t>> Problem;
 
     groute::graphs::traversal::__MultiRunner__ <
-        bfs::Algo,
+        bfs_rodinia::Algo,
         Problem,
-        groute::graphs::traversal::__GenericMultiSolver__<bfs::Algo, Problem, bfs::local_work_t, bfs::remote_work_t>,
-        bfs::SplitOps,
-        bfs::local_work_t,
-        bfs::remote_work_t,
+        groute::graphs::traversal::__GenericMultiSolver__<bfs_rodinia::Algo, Problem, bfs_rodinia::local_work_t, bfs_rodinia::remote_work_t>,
+        bfs_rodinia::SplitOps,
+        bfs_rodinia::local_work_t,
+        bfs_rodinia::remote_work_t,
         groute::graphs::multi::NodeOutputGlobalDatum<level_t> > runner;
 
     groute::graphs::multi::NodeOutputGlobalDatum<level_t> levels_datum;
@@ -398,14 +415,14 @@ bool TestBFSAsyncMulti(int ngpus)
     return runner(ngpus, levels_datum);
 }
 
-bool TestBFSSingle()
-{
-    groute::graphs::traversal::__SingleRunner__ <
-        bfs::Algo,
-        bfs::Problem<groute::graphs::dev::CSRGraph, groute::graphs::dev::GraphDatum<level_t>>,
-        groute::graphs::single::NodeOutputDatum<level_t> > runner;
+// bool TestBFSSingle()
+// {
+//     groute::graphs::traversal::__SingleRunner__ <
+//         bfs_rodinia::Algo,
+//         bfs_rodinia::Problem<groute::graphs::dev::CSRGraph, groute::graphs::dev::GraphDatum<level_t>>,      // TODO: CSRGraph --> CSRGraph_Rodinia
+//         groute::graphs::single::NodeOutputDatum<level_t> > runner;
 
-    groute::graphs::single::NodeOutputDatum<level_t> levels_datum;
+//     groute::graphs::single::NodeOutputDatum<level_t> levels_datum;
 
-    return runner(levels_datum);
-}
+//     return runner(levels_datum);
+// }

@@ -369,9 +369,11 @@ namespace graphs {
 
             index_t nodes_offset, edges_offset;
             index_t nnodes_local, nedges_local;
+            // FQ
+            char *frontier;     // use char to enable __ldg() instrinsic function
 
             CSRGraphSeg() :
-                seg_idx(-1), nsegs(-1),
+                frontier(nullptr), seg_idx(-1), nsegs(-1),
                 nodes_offset(0), edges_offset(0), nnodes_local(0), nedges_local(0) { }
 
             __device__ __host__ __forceinline__ bool owns(index_t node) const
@@ -419,6 +421,25 @@ namespace graphs {
                 return __ldg(edge_dst + edge - edges_offset);
 #else
                 return edge_dst[edge - edges_offset];
+#endif
+            }
+
+            // FQ
+            __device__ __forceinline__ bool is_active(index_t node) const
+            {
+#if __CUDA_ARCH__ >= 320
+                return __ldca(frontier + node - nodes_offset) == 1;     // load to all cache levels
+#else
+                return frontier[node - nodes_offset] == 1;
+#endif
+            }
+
+            __device__ __forceinline__ void activate(index_t node)
+            {
+#if __CUDA_ARCH__ >= 320
+                __stwb(frontier + node - nodes_offset, (char) 1);     // write-back to all cache levels
+#else
+                frontier[node - nodes_offset] = 1;
 #endif
             }
         };

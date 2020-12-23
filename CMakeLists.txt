@@ -89,6 +89,13 @@ target_link_libraries(pr ${EXTRA_LIBS})
 cuda_add_executable(pbf samples/pbf/pbf_async.cu samples/pbf/main.cpp)
 target_link_libraries(pbf ${EXTRA_LIBS})
 
+# FQ
+cuda_add_executable(bfs_rodinia src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp 
+                    samples/bfs_rodinia/bfs_async.cu samples/bfs_rodinia/bfs_async_opt.cu
+                    samples/bfs_rodinia/bfs_host.cpp 
+					samples/bfs_rodinia/main.cpp)
+target_link_libraries(bfs_rodinia ${EXTRA_LIBS})
+
 
 # Unit tests
 enable_testing()
