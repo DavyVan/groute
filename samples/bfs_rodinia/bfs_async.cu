@@ -193,7 +193,7 @@ namespace bfs_rodinia
         // for (uint32_t i = 0 + tid; i < work_size; i += nthreads)
         for (uint32_t i = 0 + tid; i < graph.owned_nnodes(); i += nthreads)
         {
-            index_t node = i + graph.nodes_offset;
+            index_t node = i + graph.owned_start_node();
             if (!graph.is_active(node))
                 continue;
             level_t next_level = levels_datum.get_item(node) + 1;
@@ -415,14 +415,14 @@ bool TestBFSAsyncMulti(int ngpus)
     return runner(ngpus, levels_datum);
 }
 
-// bool TestBFSSingle()
-// {
-//     groute::graphs::traversal::__SingleRunner__ <
-//         bfs_rodinia::Algo,
-//         bfs_rodinia::Problem<groute::graphs::dev::CSRGraph, groute::graphs::dev::GraphDatum<level_t>>,      // TODO: CSRGraph --> CSRGraph_Rodinia
-//         groute::graphs::single::NodeOutputDatum<level_t> > runner;
+bool TestBFSSingle()
+{
+    groute::graphs::traversal::__SingleRunner__ <
+        bfs_rodinia::Algo,
+        bfs_rodinia::Problem<groute::graphs::dev::CSRGraph, groute::graphs::dev::GraphDatum<level_t>>,
+        groute::graphs::single::NodeOutputDatum<level_t> > runner;
 
-//     groute::graphs::single::NodeOutputDatum<level_t> levels_datum;
+    groute::graphs::single::NodeOutputDatum<level_t> levels_datum;
 
-//     return runner(levels_datum);
-// }
+    return runner(levels_datum);
+}

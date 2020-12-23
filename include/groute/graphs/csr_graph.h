@@ -449,7 +449,10 @@ namespace graphs {
         */
         struct CSRGraph : public CSRGraphBase
         {
-            CSRGraph() { }
+            // FQ
+            char *frontier;     // use char to enable __ldg() instrinsic function
+
+            CSRGraph() : frontier(nullptr) { }
 
             __device__ __host__ __forceinline__ bool owns(index_t node) const
             {
@@ -496,6 +499,24 @@ namespace graphs {
                 return __ldg(edge_dst + edge);
 #else
                 return edge_dst[edge];
+#endif
+            }
+            // FQ
+            __device__ __forceinline__ bool is_active(index_t node) const
+            {
+#if __CUDA_ARCH__ >= 320
+                return __ldca(frontier + node) == 1;     // load to all cache levels
+#else
+                return frontier[node] == 1;
+#endif
+            }
+
+            __device__ __forceinline__ void activate(index_t node)
+            {
+#if __CUDA_ARCH__ >= 320
+                __stwb(frontier + node, (char) 1);     // write-back to all cache levels
+#else
+                frontier[node] = 1;
 #endif
             }
         };
