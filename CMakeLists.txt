@@ -96,6 +96,11 @@ cuda_add_executable(bfs_rodinia src/utils/parser.cpp src/utils/utils.cpp src/gro
 					samples/bfs_rodinia/main.cpp)
 target_link_libraries(bfs_rodinia ${EXTRA_LIBS})
 
+cuda_add_executable(pr_rodinia src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
+					samples/pr_rodinia/pr_async.cu samples/pr_rodinia/pr_async_opt.cu samples/pr_rodinia/pr_host.cpp 
+					samples/pr_rodinia/main.cpp)
+target_link_libraries(pr_rodinia ${EXTRA_LIBS})
+
 
 # Unit tests
 enable_testing()

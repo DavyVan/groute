@@ -43,12 +43,12 @@ bool TestPageRankAsyncMultiOptimized(int ngpus);
 void CleanupGraphs();
 
 
-namespace pr
+namespace pr_rodinia
 {
     struct App
     {
-        static const char* Name()       { return "page rank"; }
-        static const char* NameUpper()  { return "Page Rank"; }
+        static const char* Name()       { return "page rank rodinia"; }
+        static const char* NameUpper()  { return "Page Rank rodinia"; }
 
         static bool Single()            { return TestPageRankSingle(); }
         static bool AsyncMulti(int G)   { return FLAGS_opt ? TestPageRankAsyncMultiOptimized(G) : TestPageRankAsyncMulti(G); }
@@ -59,7 +59,7 @@ namespace pr
 
 int main(int argc, char **argv)
 {
-    Skeleton<pr::App> app;
+    Skeleton<pr_rodinia::App> app;
     int exit = app(argc, argv);
 
     // cudaDeviceReset must be called before exiting in order for profiling and

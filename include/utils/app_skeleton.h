@@ -119,8 +119,9 @@ DEFINE_int32(parmode, 1, "Partitioning mode:\n\t"
                          "4: Real Random\n\t"
                          "5: METIS with edge weights (max of endpoints)\n\t"
                          "6: METIS with edge weights (LCC)\n\t"
-                         "7: METIS with v wgt (degree) & e wgt (max)\n\t"
-                         "8: METIS with v wgt (degree) & e wgt (LCC)");
+                         "7: Locality-Aware TB Graph partitioning\n\t"
+                         "8: METIS with v wgt (degree) & e wgt (max)\n\t"
+                         "9: METIS with v wgt (degree) & e wgt (LCC)");
 #else
 DEFINE_bool(pn, false, "[BINARY NOT BUILT WITH METIS] Partition the input graph using METIS (requires a symmetric graph)");
 #endif

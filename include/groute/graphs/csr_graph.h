@@ -652,6 +652,7 @@ namespace graphs {
             }
         };
 
+        // (1)
         class MetisPartitioner : public GraphPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -676,6 +677,7 @@ namespace graphs {
         };
 
         // FQ
+        // (0)
         class NaivePartitioner : public GraphPartitioner    // copied from MetisPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -699,6 +701,7 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        // (2)
         class MetisPartitionerDegreeW : public GraphPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -722,6 +725,7 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        // (3)
         class TBGraphConstructor : public GraphPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -745,6 +749,7 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        // (4)
         class RealRandomPartitioner : public GraphPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -768,7 +773,7 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
-        // (3)
+        // (5)
         class MetisPartitionerEW_MaxV : public GraphPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -792,7 +797,7 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
-        // (4)
+        // (6)
         class MetisPartitionerEW_LCC : public GraphPartitioner
         {
             host::CSRGraph& m_origin_graph;
@@ -803,6 +808,30 @@ namespace graphs {
 
         public:
             MetisPartitionerEW_LCC(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
+        // (7)
+        class LocalityAwareTBPartitioner : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            LocalityAwareTBPartitioner(host::CSRGraph& origin_graph, int nsegs);
             
             host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
             host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
@@ -915,6 +944,10 @@ namespace graphs {
                     else if (FLAGS_parmode == 6)
                     {
                         m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerEW_LCC>(new MetisPartitionerEW_LCC(host_graph, ngpus));
+                    }
+                    else if (FLAGS_parmode == 7)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<LocalityAwareTBPartitioner>(new LocalityAwareTBPartitioner(host_graph, ngpus));
                     }
                     // else if (FLAGS_parmode == 7)
                     // {

@@ -53,7 +53,7 @@
 
 
 
-namespace pr {
+namespace pr_rodinia {
     namespace opt {
 
         struct RankData
@@ -438,7 +438,7 @@ namespace pr {
                             high_work_counter, low_work_counter,
                             kernel_internal_counter, send_signal_ptr,
                             barrier_lifetime,
-                            pr::opt::SplitOps(m_graph, m_residual),
+                            pr_rodinia::opt::SplitOps(m_graph, m_residual),
                             m_graph, m_current_ranks, m_residual
                             );
                     }
@@ -457,7 +457,7 @@ namespace pr {
                             high_work_counter, low_work_counter,
                             kernel_internal_counter, send_signal_ptr,
                             barrier_lifetime,
-                            pr::opt::SplitOps(m_graph, m_residual),
+                            pr_rodinia::opt::SplitOps(m_graph, m_residual),
                             m_graph, m_current_ranks, m_residual
                             );
                     }
@@ -480,7 +480,7 @@ namespace pr {
                             high_work_counter, low_work_counter,
                             kernel_internal_counter, send_signal_ptr,
                             barrier_lifetime,
-                            pr::opt::SplitOps(m_graph, m_residual),
+                            pr_rodinia::opt::SplitOps(m_graph, m_residual),
                             m_graph, m_current_ranks, m_residual
                             );
                     }
@@ -499,7 +499,7 @@ namespace pr {
                             high_work_counter, low_work_counter,
                             kernel_internal_counter, send_signal_ptr,
                             barrier_lifetime,
-                            pr::opt::SplitOps(m_graph, m_residual),
+                            pr_rodinia::opt::SplitOps(m_graph, m_residual),
                             m_graph, m_current_ranks, m_residual
                             );
                     }
@@ -513,7 +513,7 @@ namespace pr {
             static const char* Name()           { return "PR"; }
 
             static void Init(
-                groute::graphs::traversal::Context<pr::opt::Algo>& context,
+                groute::graphs::traversal::Context<pr_rodinia::opt::Algo>& context,
                 groute::graphs::multi::CSRGraphAllocator& graph_manager,
                 groute::router::Router<remote_work_t>& worklist_router,
                 groute::opt::DistributedWorklist<local_work_t, remote_work_t, SplitOps>& distributed_worklist)
@@ -566,20 +566,20 @@ bool TestPageRankAsyncMultiOptimized(int ngpus)
     typedef groute::graphs::multi::NodeOutputGlobalDatum<rank_t> ResidualDatum;
     typedef groute::graphs::multi::NodeOutputLocalDatum<rank_t> RankDatum;
     
-    typedef pr::opt::FusedProblem<groute::graphs::dev::CSRGraphSeg, groute::graphs::dev::GraphDatum, groute::graphs::dev::GraphDatumSeg> ProblemType;
+    typedef pr_rodinia::opt::FusedProblem<groute::graphs::dev::CSRGraphSeg, groute::graphs::dev::GraphDatum, groute::graphs::dev::GraphDatumSeg> ProblemType;
     typedef groute::graphs::traversal::FusedSolver<
-        pr::opt::Algo, ProblemType, 
-        pr::opt::local_work_t , pr::opt::remote_work_t, rank_t, 
-        pr::opt::SplitOps, 
+        pr_rodinia::opt::Algo, ProblemType, 
+        pr_rodinia::opt::local_work_t , pr_rodinia::opt::remote_work_t, rank_t, 
+        pr_rodinia::opt::SplitOps, 
         groute::graphs::dev::CSRGraphSeg, groute::graphs::dev::GraphDatumSeg<rank_t>, groute::graphs::dev::GraphDatum<rank_t>> SolverType;
     
     groute::graphs::traversal::__MultiRunner__Opt__ <
-        pr::opt::Algo,
+        pr_rodinia::opt::Algo,
         ProblemType,
         SolverType,
-        pr::opt::SplitOps,
-        pr::opt::local_work_t,
-        pr::opt::remote_work_t,
+        pr_rodinia::opt::SplitOps,
+        pr_rodinia::opt::local_work_t,
+        pr_rodinia::opt::remote_work_t,
         ResidualDatum, RankDatum > runner;
     
     ResidualDatum residual;

@@ -53,7 +53,7 @@ DECLARE_bool(verbose);
 #define GTID (blockIdx.x * blockDim.x + threadIdx.x)
 
 
-namespace pr
+namespace pr_rodinia
 {
     struct RankData
     {
@@ -217,9 +217,19 @@ namespace pr
 
         uint32_t work_size = work_source.get_size();
 
+        // FQ
+        // construct frontier
         for (uint32_t i = 0 + tid; i < work_size; i += nthreads)
         {
             index_t node = work_source.get_work(i);
+            graph.activate(node);
+        }
+
+        for (uint32_t i = 0 + tid; i < graph.owned_nnodes(); i += nthreads)
+        {
+            index_t node = i + graph.owned_start_node();
+            if (!graph.is_active(node))
+                continue;
 
             rank_t res = atomicExch(residual.get_item_ptr(node), 0);
             if (res == 0) continue; // might happen if work_source has duplicates  
@@ -344,9 +354,19 @@ namespace pr
 
         uint32_t work_size = work_source.get_size();
 
+        // FQ
+        // construct frontier
         for (uint32_t i = 0 + tid; i < work_size; i += nthreads)
         {
             index_t node = work_source.get_work(i);
+            graph.activate(node);
+        }
+
+        for (uint32_t i = 0 + tid; i < graph.owned_nnodes(); i += nthreads)
+        {
+            index_t node = i + graph.owned_start_node();
+            if (!graph.is_active(node))
+                continue;
 
             rank_t res = atomicExch(residual.get_item_ptr(node), 0);
             if (res == 0) continue; // might happen if work_source has duplicates  
@@ -510,10 +530,17 @@ namespace pr
         template<
             typename WorkSource,
             template <typename> class TWorklist>
-        void Relax__Single__(const WorkSource& work_source, TWorklist<index_t>& output_worklist, groute::Stream& stream) const
+        void Relax__Single__(const WorkSource& work_source, TWorklist<index_t>& output_worklist, groute::Stream& stream)
         {
+            // FQ
+            if (m_graph.frontier == nullptr)
+            {
+                GROUTE_CUDA_CHECK(cudaMalloc(&m_graph.frontier, m_graph.owned_nnodes() * sizeof(char)));
+            }
+            GROUTE_CUDA_CHECK(cudaMemset(m_graph.frontier, 0, m_graph.owned_nnodes() * sizeof(char)));
+
             dim3 grid_dims, block_dims;
-            KernelSizing(grid_dims, block_dims, work_source.get_size());
+            KernelSizing(grid_dims, block_dims, m_graph.owned_nnodes());
 
             if (FLAGS_cta_np)
             {
@@ -536,10 +563,17 @@ namespace pr
         template<
             typename WorkSource,
             template <typename> class TWorklist>
-        void Relax__Multi__(const WorkSource& work_source, TWorklist<index_t>& output_worklist, groute::Stream& stream) const
+        void Relax__Multi__(const WorkSource& work_source, TWorklist<index_t>& output_worklist, groute::Stream& stream)
         {
+            // FQ
+            if (m_graph.frontier == nullptr)
+            {
+                GROUTE_CUDA_CHECK(cudaMalloc(&m_graph.frontier, m_graph.owned_nnodes() * sizeof(char)));
+            }
+            GROUTE_CUDA_CHECK(cudaMemset(m_graph.frontier, 0, m_graph.owned_nnodes() * sizeof(char)));
+
             dim3 grid_dims, block_dims;
-            KernelSizing(grid_dims, block_dims, work_source.get_size());
+            KernelSizing(grid_dims, block_dims, m_graph.owned_nnodes());
 
             if (FLAGS_cta_np)
             {
@@ -680,7 +714,7 @@ namespace pr
         static const char* Name()           { return "PR"; }
 
         static void Init(
-            groute::graphs::traversal::Context<pr::Algo>& context,
+            groute::graphs::traversal::Context<pr_rodinia::Algo>& context,
             groute::graphs::multi::CSRGraphAllocator& graph_manager,
             groute::router::Router<remote_work_t>& worklist_router,
             groute::DistributedWorklist<local_work_t, remote_work_t>& distributed_worklist)
@@ -732,15 +766,15 @@ bool TestPageRankAsyncMulti(int ngpus)
     typedef groute::graphs::multi::NodeOutputGlobalDatum<rank_t> ResidualDatum;
     typedef groute::graphs::multi::NodeOutputLocalDatum<rank_t> RankDatum;
     
-    typedef pr::Solver<GraphAllocator::DeviceObjectType, groute::graphs::dev::GraphDatum, groute::graphs::dev::GraphDatumSeg> SolverType;
+    typedef pr_rodinia::Solver<GraphAllocator::DeviceObjectType, groute::graphs::dev::GraphDatum, groute::graphs::dev::GraphDatumSeg> SolverType;
     
     groute::graphs::traversal::__MultiRunner__ <
-        pr::Algo,
+        pr_rodinia::Algo,
         SolverType::ProblemType,
         SolverType,
-        pr::SplitOps,
-        pr::local_work_t,
-        pr::remote_work_t,
+        pr_rodinia::SplitOps,
+        pr_rodinia::local_work_t,
+        pr_rodinia::remote_work_t,
         ResidualDatum, RankDatum > runner;
     
     ResidualDatum residual;
@@ -754,7 +788,7 @@ bool TestPageRankSingle()
     groute::graphs::single::NodeOutputDatum<rank_t> residual;
     groute::graphs::single::NodeOutputDatum<rank_t> current_ranks;
 
-    groute::graphs::traversal::Context<pr::Algo> context(1);
+    groute::graphs::traversal::Context<pr_rodinia::Algo> context(1);
 
     groute::graphs::single::CSRGraphAllocator
         dev_graph_allocator(context.host_graph);
@@ -765,7 +799,7 @@ bool TestPageRankSingle()
 
     context.SyncDevice(0); // graph allocations are on default streams, must sync device 
 
-    pr::Problem<
+    pr_rodinia::Problem<
         groute::graphs::dev::CSRGraph,
         groute::graphs::dev::GraphDatum, groute::graphs::dev::GraphDatum>
         solver(
@@ -823,18 +857,18 @@ bool TestPageRankSingle()
     if (FLAGS_repetitions > 1)
         printf("\nWarning: ignoring repetitions flag, running just one repetition (not implemented)\n");
 
-    printf("\n%s: %f ms. <filter>\n\n", pr::Algo::Name(), sw.ms() / FLAGS_repetitions);
-    printf("%s terminated after %d iterations (max: %d)\n\n", pr::Algo::Name(), iteration, FLAGS_max_pr_iterations);
+    printf("\n%s: %f ms. <filter>\n\n", pr_rodinia::Algo::Name(), sw.ms() / FLAGS_repetitions);
+    printf("%s terminated after %d iterations (max: %d)\n\n", pr_rodinia::Algo::Name(), iteration, FLAGS_max_pr_iterations);
 
     // Gather
-    auto gathered_output = pr::Algo::Gather(dev_graph_allocator, residual, current_ranks);
+    auto gathered_output = pr_rodinia::Algo::Gather(dev_graph_allocator, residual, current_ranks);
 
     if (FLAGS_output.length() != 0)
-        pr::Algo::Output(FLAGS_output.c_str(), gathered_output);
+        pr_rodinia::Algo::Output(FLAGS_output.c_str(), gathered_output);
 
     if (FLAGS_check) {
-        auto regression = pr::Algo::Host(context.host_graph, residual, current_ranks);
-        return pr::Algo::CheckErrors(gathered_output, regression) == 0;
+        auto regression = pr_rodinia::Algo::Host(context.host_graph, residual, current_ranks);
+        return pr_rodinia::Algo::CheckErrors(gathered_output, regression) == 0;
     }
     else {
         printf("Warning: Result not checked\n");
