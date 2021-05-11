@@ -2005,6 +2005,499 @@ namespace graphs {
             return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
         }
 
+/* -------------------------- TB Graph Constructor With METIS -------------------------- */
+
+        TBGraphConstructorWithMETIS::TBGraphConstructorWithMETIS(host::CSRGraph& origin_graph, int nsegs) : 
+            m_origin_graph(origin_graph), 
+            m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
+            m_reverse_lookup(origin_graph.nnodes), m_seg_offsets(nsegs + 1),
+            m_nsegs(nsegs)
+        {
+#ifndef HAVE_METIS
+            printf("\nWARNING: Binary not built with METIS support. Exiting.\n");
+            exit(100);
+#else
+            printf("\nStarting TB Graph construction...\n");
+
+            idx_t nnodes = m_origin_graph.nnodes;
+            idx_t nedges = m_origin_graph.nedges;
+
+            idx_t ncons = 1;
+            idx_t nparts = m_nsegs;
+
+            idx_t edgecut;
+            std::vector<idx_t> partition_table(nnodes);
+
+            // Convert to 64-bit for metis
+            std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
+            for (uint32_t i = 0; i < nnodes + 1; ++i)
+                row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
+            for (uint32_t i = 0; i < nedges; ++i)
+                edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
+            if(m_origin_graph.edge_weights)
+            {
+                edge_weights.resize(nedges);
+                for (uint32_t i = 0; i < nedges; ++i)
+                    edge_weights[i] = static_cast<idx_t>(m_origin_graph.edge_weights[i]);
+            }
+            printf("Converted graph to %d-bit, calling METIS (1)...\n", (int)IDXTYPEWIDTH);
+
+            clock_t t1 = clock();
+
+            int result = METIS_PartGraphRecursive(
+                &nnodes,                      // 
+                &ncons,                       //
+                row_start.data(),     //
+                edge_dst.data(),      //
+                NULL,                         // vwgt
+                NULL,                         // vsize
+                m_origin_graph.edge_weights ? edge_weights.data() : nullptr,  // adjwgt
+                &nparts,                      // nparts
+                NULL,                         // tpwgts
+                NULL,                         // ubvec
+                NULL,                         // options
+                &edgecut,                     // objval
+                &partition_table[0]);         // part [out]
+
+            if (result != METIS_OK) {
+                printf(
+                    "METIS partitioning failed (%s error), Exiting.\n", 
+                    result == METIS_ERROR_INPUT ? "input" : result == METIS_ERROR_MEMORY ? "memory" : "general");
+                exit(0);
+            }
+            clock_t t2 = clock();
+            printf("Partitioned in %.3f, constructing subgraphs...\n", (t2-t1)/(float)CLOCKS_PER_SEC);
+
+            struct node_partition {
+                    index_t node;
+                    index_t partition;
+
+                    node_partition(index_t node, index_t partition) : node(node), partition(partition) {}
+                    node_partition() : node(-1), partition(-1) {}
+
+                    inline bool operator< (const node_partition& rhs) const {
+                        return partition < rhs.partition;
+                    }
+            };
+
+            std::vector<node_partition> node_partitions(nnodes);
+
+            for (index_t node = 0; node < nnodes; ++node)
+            {
+                node_partitions[node] = node_partition(node, partition_table[node]);
+            }
+
+            std::stable_sort(node_partitions.begin(), node_partitions.end());
+
+            if (m_origin_graph.edge_weights != nullptr)
+            {
+                m_partitioned_graph.AllocWeights();
+            }
+
+            int current_seg = -1;
+
+            for (index_t new_nidx = 0, edge_pos = 0; new_nidx < nnodes; ++new_nidx)
+            {
+                int seg = node_partitions[new_nidx].partition;
+                while (seg > current_seg) // if this is true we have crossed the border to the next seg (looping with while just in case)
+                {
+                    m_seg_offsets[++current_seg] = new_nidx;
+                }
+
+                index_t origin_nidx = node_partitions[new_nidx].node; 
+                m_reverse_lookup[origin_nidx] = new_nidx;
+
+                index_t edge_start = m_origin_graph.row_start[origin_nidx];
+                index_t edge_end = m_origin_graph.row_start[origin_nidx+1];
+
+                m_partitioned_graph.row_start[new_nidx] = edge_pos;
+
+                std::copy(m_origin_graph.edge_dst + edge_start, m_origin_graph.edge_dst + edge_end, m_partitioned_graph.edge_dst + edge_pos);
+
+                if (m_origin_graph.edge_weights != nullptr) // copy weights
+                    std::copy(m_origin_graph.edge_weights + edge_start, m_origin_graph.edge_weights + edge_end, m_partitioned_graph.edge_weights + edge_pos);
+
+                edge_pos += (edge_end - edge_start);
+            }
+            
+            while (m_nsegs > current_seg) m_seg_offsets[++current_seg] = nnodes;
+
+            m_partitioned_graph.row_start[nnodes] = nedges;
+            
+            // Map the original destinations, copied from the origin graph to the new index space
+            for (index_t edge = 0; edge < nedges; ++edge)
+            {
+                index_t origin_dest = m_partitioned_graph.edge_dst[edge];
+                m_partitioned_graph.edge_dst[edge] = m_reverse_lookup[origin_dest];
+            }
+
+            // construct subgraph: allocate intermediate data structures
+            std::vector<std::vector<idx_t> > subgraphs_row_start(nparts);
+            std::vector<std::vector<idx_t> > subgraphs_edge_dst(nparts);
+            std::vector<std::vector<idx_t> > subgraphs_partition_tables(nparts);
+            std::vector<idx_t> subgraphs_nnodes(nparts);
+            std::vector<idx_t> subgraphs_nedges(nparts);
+            std::vector<idx_t> subgraphs_nTBs(nparts);
+            for (int i = 0; i < nparts; i++)
+            {
+                idx_t _nnodes = m_seg_offsets[i+1] - m_seg_offsets[i];
+                subgraphs_row_start[i] = std::vector<idx_t>(_nnodes+1);
+                subgraphs_edge_dst[i] = std::vector<idx_t>(m_partitioned_graph.row_start[m_seg_offsets[i+1]] - m_partitioned_graph.row_start[m_seg_offsets[i]]);
+                subgraphs_partition_tables[i] = std::vector<idx_t>(_nnodes);
+            }
+
+            // construct subgraph: delete boundary edges
+            for (int i = 0; i < nparts; i++)        // for each gpu partition
+            {
+                idx_t nedges_per_gpu = 0;
+                idx_t nnodes_per_gpu = 0;
+                for (idx_t node = m_seg_offsets[i]; node < m_seg_offsets[i+1]; node++) // for each node
+                {
+                    subgraphs_row_start[i][nnodes_per_gpu++] = nedges_per_gpu;
+                    for (idx_t edge = m_partitioned_graph.row_start[node]; edge < m_partitioned_graph.row_start[node + 1]; edge++) // for each edge
+                    {
+                        idx_t dst = m_partitioned_graph.edge_dst[edge];
+
+                        // if dst is in the current gpu partition
+                        if (dst >= m_seg_offsets[i] && dst < m_seg_offsets[i+1])
+                        {
+                            subgraphs_edge_dst[i][nedges_per_gpu++] = dst - m_seg_offsets[i];
+                        }
+                    }
+                }
+                subgraphs_row_start[i][nnodes_per_gpu] = nedges_per_gpu;
+                subgraphs_nnodes[i] = nnodes_per_gpu;
+                subgraphs_nedges[i] = nedges_per_gpu;
+            }
+
+            clock_t t3 = clock();
+            printf("subgraph constructed in %.3f, calling METIS for each GPU...\n", (t3-t2)/(float)CLOCKS_PER_SEC);
+            
+            // for each gpu, call METIS
+            for (int i = 0; i < nparts; i++)
+            {
+                idx_t _nnodes = subgraphs_nnodes[i];
+                const idx_t TB_SIZE = 32;
+                idx_t TB_NUM = std::ceil((float)_nnodes / TB_SIZE);    // total number of TBs
+                subgraphs_nTBs[i] = TB_NUM;
+                
+                clock_t start = clock();
+                int result = METIS_PartGraphKway(
+                    &_nnodes,                      // 
+                    &ncons,                       //
+                    subgraphs_row_start[i].data(),     //
+                    subgraphs_edge_dst[i].data(),      //
+                    NULL,                         // vwgt
+                    NULL,                         // vsize
+                    NULL,  // adjwgt
+                    &TB_NUM,                      // nparts
+                    NULL,                         // tpwgts
+                    NULL,                         // ubvec
+                    NULL,                         // options
+                    &edgecut,                     // objval
+                    &subgraphs_partition_tables[i][0]);         // part [out]
+
+                if (result != METIS_OK) {
+                    printf(
+                        "METIS partitioning failed (%s error), Exiting.\n", 
+                        result == METIS_ERROR_INPUT ? "input" : result == METIS_ERROR_MEMORY ? "memory" : "general");
+                    exit(0);
+                }
+                clock_t end = clock();
+                printf("Partitiong (2) for GPU %d finished in %.3f\n", i, (end-start)/(float)CLOCKS_PER_SEC);
+            }
+
+            // final re-ordering
+            clock_t t4 = clock();
+            idx_t TB_offset = 0;
+            for (int i = 0; i < nparts; i++)
+            {
+                for (idx_t node = 0; node < subgraphs_nnodes[i]; node++)
+                {
+                    node_partitions[node+m_seg_offsets[i]].partition = subgraphs_partition_tables[i][node] + TB_offset;
+                }
+                TB_offset += subgraphs_nTBs[i];
+            }
+            std::stable_sort(node_partitions.begin(), node_partitions.end());
+
+            std::vector<idx_t> fake_seg_offset(TB_offset);
+            current_seg = -1;
+            for (index_t new_nidx = 0, edge_pos = 0; new_nidx < nnodes; ++new_nidx)
+            {
+                int seg = node_partitions[new_nidx].partition;
+                while (seg > current_seg) // if this is true we have crossed the border to the next seg (looping with while just in case)
+                {
+                    fake_seg_offset[++current_seg] = new_nidx;
+                }
+
+                index_t origin_nidx = node_partitions[new_nidx].node; 
+                m_reverse_lookup[origin_nidx] = new_nidx;
+
+                index_t edge_start = m_origin_graph.row_start[origin_nidx];
+                index_t edge_end = m_origin_graph.row_start[origin_nidx+1];
+
+                m_partitioned_graph.row_start[new_nidx] = edge_pos;
+
+                std::copy(m_origin_graph.edge_dst + edge_start, m_origin_graph.edge_dst + edge_end, m_partitioned_graph.edge_dst + edge_pos);
+
+                if (m_origin_graph.edge_weights != nullptr) // copy weights
+                    std::copy(m_origin_graph.edge_weights + edge_start, m_origin_graph.edge_weights + edge_end, m_partitioned_graph.edge_weights + edge_pos);
+
+                edge_pos += (edge_end - edge_start);
+            }
+            
+            while (m_nsegs > current_seg) fake_seg_offset[++current_seg] = nnodes;
+
+            m_partitioned_graph.row_start[nnodes] = nedges;
+            
+            // Map the original destinations, copied from the origin graph to the new index space
+            for (index_t edge = 0; edge < nedges; ++edge)
+            {
+                index_t origin_dest = m_partitioned_graph.edge_dst[edge];
+                m_partitioned_graph.edge_dst[edge] = m_reverse_lookup[origin_dest];
+            }
+            clock_t t5 = clock();
+            printf("final re-ordering finished in %.3f\n", (t5-t4)/(float)CLOCKS_PER_SEC);
+#endif
+        }
+
+        void TBGraphConstructorWithMETIS::GetSegIndices(
+            int seg_idx,
+            index_t& seg_snode, index_t& seg_nnodes,
+            index_t& seg_sedge, index_t& seg_nedges) const
+        {
+            index_t seg_enode, seg_eedge;
+
+            seg_snode = m_seg_offsets[seg_idx];
+            seg_enode = m_seg_offsets[seg_idx + 1];
+            seg_nnodes = seg_enode - seg_snode;                
+
+            seg_sedge = m_partitioned_graph.row_start[seg_snode];                            // start edge
+            seg_eedge = m_partitioned_graph.row_start[seg_enode];                            // end edge
+            seg_nedges = seg_eedge - seg_sedge;  
+        }
+        
+        std::function<index_t(index_t)> TBGraphConstructorWithMETIS::GetReverseLookupFunc()
+        {
+            return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
+        }
+
+/* -------------------------- Graph Splitter -------------------------- */
+
+        GraphSplitter::GraphSplitter(host::CSRGraph& origin_graph, int nsegs) : 
+            m_origin_graph(origin_graph), 
+            m_partitioned_graph(origin_graph.nnodes, origin_graph.nedges), 
+            m_reverse_lookup(origin_graph.nnodes), m_seg_offsets(nsegs + 1),
+            m_nsegs(nsegs)
+        {
+#ifndef HAVE_METIS
+            printf("\nWARNING: Binary not built with METIS support. Exiting.\n");
+            exit(100);
+#else
+            printf("\nStarting graph splitting...\n");
+
+            idx_t nnodes = m_origin_graph.nnodes;
+            idx_t nedges = m_origin_graph.nedges;
+
+            idx_t ncons = 1;
+            idx_t nparts = m_nsegs;
+
+            idx_t edgecut;
+            std::vector<idx_t> partition_table(nnodes);
+
+            // Convert to 64-bit for metis
+            std::vector<idx_t> row_start (nnodes+1), edge_dst (nedges), edge_weights;
+            for (uint32_t i = 0; i < nnodes + 1; ++i)
+                row_start[i] = static_cast<idx_t>(m_origin_graph.row_start[i]);
+            for (uint32_t i = 0; i < nedges; ++i)
+                edge_dst[i] = static_cast<idx_t>(m_origin_graph.edge_dst[i]);
+            if(m_origin_graph.edge_weights)
+            {
+                edge_weights.resize(nedges);
+                for (uint32_t i = 0; i < nedges; ++i)
+                    edge_weights[i] = static_cast<idx_t>(m_origin_graph.edge_weights[i]);
+            }
+            printf("Converted graph to %d-bit, calling METIS...\n", (int)IDXTYPEWIDTH);
+
+            clock_t t1 = clock();
+
+            int result = METIS_PartGraphRecursive(
+                &nnodes,                      // 
+                &ncons,                       //
+                row_start.data(),     //
+                edge_dst.data(),      //
+                NULL,                         // vwgt
+                NULL,                         // vsize
+                m_origin_graph.edge_weights ? edge_weights.data() : nullptr,  // adjwgt
+                &nparts,                      // nparts
+                NULL,                         // tpwgts
+                NULL,                         // ubvec
+                NULL,                         // options
+                &edgecut,                     // objval
+                &partition_table[0]);         // part [out]
+
+            if (result != METIS_OK) {
+                printf(
+                    "METIS partitioning failed (%s error), Exiting.\n", 
+                    result == METIS_ERROR_INPUT ? "input" : result == METIS_ERROR_MEMORY ? "memory" : "general");
+                exit(0);
+            }
+            clock_t t2 = clock();
+            printf("Partitioned in %.3f, constructing subgraphs...\n", (t2-t1)/(float)CLOCKS_PER_SEC);
+
+            struct node_partition {
+                    index_t node;
+                    index_t partition;
+
+                    node_partition(index_t node, index_t partition) : node(node), partition(partition) {}
+                    node_partition() : node(-1), partition(-1) {}
+
+                    inline bool operator< (const node_partition& rhs) const {
+                        return partition < rhs.partition;
+                    }
+            };
+
+            std::vector<node_partition> node_partitions(nnodes);
+
+            for (index_t node = 0; node < nnodes; ++node)
+            {
+                node_partitions[node] = node_partition(node, partition_table[node]);
+            }
+
+            std::stable_sort(node_partitions.begin(), node_partitions.end());
+
+            if (m_origin_graph.edge_weights != nullptr)
+            {
+                m_partitioned_graph.AllocWeights();
+            }
+
+            int current_seg = -1;
+
+            for (index_t new_nidx = 0, edge_pos = 0; new_nidx < nnodes; ++new_nidx)
+            {
+                int seg = node_partitions[new_nidx].partition;
+                while (seg > current_seg) // if this is true we have crossed the border to the next seg (looping with while just in case)
+                {
+                    m_seg_offsets[++current_seg] = new_nidx;
+                }
+
+                index_t origin_nidx = node_partitions[new_nidx].node; 
+                m_reverse_lookup[origin_nidx] = new_nidx;
+
+                index_t edge_start = m_origin_graph.row_start[origin_nidx];
+                index_t edge_end = m_origin_graph.row_start[origin_nidx+1];
+
+                m_partitioned_graph.row_start[new_nidx] = edge_pos;
+
+                std::copy(m_origin_graph.edge_dst + edge_start, m_origin_graph.edge_dst + edge_end, m_partitioned_graph.edge_dst + edge_pos);
+
+                if (m_origin_graph.edge_weights != nullptr) // copy weights
+                    std::copy(m_origin_graph.edge_weights + edge_start, m_origin_graph.edge_weights + edge_end, m_partitioned_graph.edge_weights + edge_pos);
+
+                edge_pos += (edge_end - edge_start);
+            }
+            
+            while (m_nsegs > current_seg) m_seg_offsets[++current_seg] = nnodes;
+
+            m_partitioned_graph.row_start[nnodes] = nedges;
+            
+            // Map the original destinations, copied from the origin graph to the new index space
+            for (index_t edge = 0; edge < nedges; ++edge)
+            {
+                index_t origin_dest = m_partitioned_graph.edge_dst[edge];
+                m_partitioned_graph.edge_dst[edge] = m_reverse_lookup[origin_dest];
+            }
+
+            // construct subgraph: allocate intermediate data structures
+            std::vector<std::vector<idx_t> > subgraphs_row_start(nparts);
+            std::vector<std::vector<idx_t> > subgraphs_edge_dst(nparts);
+            std::vector<std::vector<idx_t> > subgraphs_partition_tables(nparts);
+            std::vector<idx_t> subgraphs_nnodes(nparts);
+            std::vector<idx_t> subgraphs_nedges(nparts);
+            std::vector<idx_t> subgraphs_nTBs(nparts);
+            for (int i = 0; i < nparts; i++)
+            {
+                idx_t _nnodes = m_seg_offsets[i+1] - m_seg_offsets[i];
+                subgraphs_row_start[i] = std::vector<idx_t>(_nnodes+1);
+                subgraphs_edge_dst[i] = std::vector<idx_t>(m_partitioned_graph.row_start[m_seg_offsets[i+1]] - m_partitioned_graph.row_start[m_seg_offsets[i]]);
+                subgraphs_partition_tables[i] = std::vector<idx_t>(_nnodes);
+            }
+
+            // construct subgraph: delete boundary edges
+            for (int i = 0; i < nparts; i++)        // for each gpu partition
+            {
+                idx_t nedges_per_gpu = 0;
+                idx_t nnodes_per_gpu = 0;
+                for (idx_t node = m_seg_offsets[i]; node < m_seg_offsets[i+1]; node++) // for each node
+                {
+                    subgraphs_row_start[i][nnodes_per_gpu++] = nedges_per_gpu;
+                    for (idx_t edge = m_partitioned_graph.row_start[node]; edge < m_partitioned_graph.row_start[node + 1]; edge++) // for each edge
+                    {
+                        idx_t dst = m_partitioned_graph.edge_dst[edge];
+
+                        // if dst is in the current gpu partition
+                        if (dst >= m_seg_offsets[i] && dst < m_seg_offsets[i+1])
+                        {
+                            subgraphs_edge_dst[i][nedges_per_gpu++] = dst - m_seg_offsets[i];
+                        }
+                    }
+                }
+                subgraphs_row_start[i][nnodes_per_gpu] = nedges_per_gpu;
+                subgraphs_nnodes[i] = nnodes_per_gpu;
+                subgraphs_nedges[i] = nedges_per_gpu;
+            }
+
+            clock_t t3 = clock();
+            printf("subgraph constructed in %.3f, writting to file...\n", (t3-t2)/(float)CLOCKS_PER_SEC);
+            
+            // write to files
+            for (int i = 0; i < nparts; i++)
+            {
+                std::string filename = "/tmp/com-orkut.m9." + std::to_string(nparts) + "gpus.subgraph" + std::to_string(i+1);
+                std::ofstream fout;
+                fout.open(filename, std::ios::out);
+                // nnodes, nedges
+                fout << subgraphs_nnodes[i] << " " << subgraphs_nedges[i]/2 << std::endl;
+                // for each vertex
+                for (idx_t v = 0; v < subgraphs_nnodes[i]; v++)
+                {
+                    for (idx_t e = subgraphs_row_start[i][v]; e < subgraphs_row_start[i][v+1]; e++)
+                    {
+                        fout << subgraphs_edge_dst[i][e]+1 << " ";
+                    }
+                    fout << std::endl;
+                }
+                fout << std::endl;
+                fout.close();
+            }
+            
+            clock_t t5 = clock();
+            printf("Written to file in %.3f\n", (t5-t3)/(float)CLOCKS_PER_SEC);
+            exit(0);
+#endif
+        }
+
+        void GraphSplitter::GetSegIndices(
+            int seg_idx,
+            index_t& seg_snode, index_t& seg_nnodes,
+            index_t& seg_sedge, index_t& seg_nedges) const
+        {
+            index_t seg_enode, seg_eedge;
+
+            seg_snode = m_seg_offsets[seg_idx];
+            seg_enode = m_seg_offsets[seg_idx + 1];
+            seg_nnodes = seg_enode - seg_snode;                
+
+            seg_sedge = m_partitioned_graph.row_start[seg_snode];                            // start edge
+            seg_eedge = m_partitioned_graph.row_start[seg_enode];                            // end edge
+            seg_nedges = seg_eedge - seg_sedge;  
+        }
+        
+        std::function<index_t(index_t)> GraphSplitter::GetReverseLookupFunc()
+        {
+            return [this](index_t idx) { return this->m_reverse_lookup[idx]; };
+        }
+
     }   // namespace multi
 }
 }

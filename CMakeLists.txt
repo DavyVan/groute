@@ -65,29 +65,29 @@ set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DNDEBUG")
 
 include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include ${METIS_INCLUDE_DIRS})
-cuda_add_executable(cc src/utils/parser.cpp src/utils/utils.cpp
-                    samples/cc/cc_async.cu samples/cc/main.cpp)
-target_link_libraries(cc ${EXTRA_LIBS})
+# cuda_add_executable(cc src/utils/parser.cpp src/utils/utils.cpp
+#                     samples/cc/cc_async.cu samples/cc/main.cpp)
+# target_link_libraries(cc ${EXTRA_LIBS})
 
-cuda_add_executable(bfs src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp 
-                    samples/bfs/bfs_async.cu samples/bfs/bfs_async_opt.cu
-                    samples/bfs/bfs_host.cpp 
-					samples/bfs/main.cpp)
-target_link_libraries(bfs ${EXTRA_LIBS})
+# cuda_add_executable(bfs src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp 
+#                     samples/bfs/bfs_async.cu samples/bfs/bfs_async_opt.cu
+#                     samples/bfs/bfs_host.cpp 
+# 					samples/bfs/main.cpp)
+# target_link_libraries(bfs ${EXTRA_LIBS})
 
-cuda_add_executable(sssp src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
-                    samples/sssp/sssp_async.cu samples/sssp/sssp_async_opt.cu
-                    samples/sssp/sssp_host.cpp 
-					samples/sssp/main.cpp)
-target_link_libraries(sssp ${EXTRA_LIBS})
+# cuda_add_executable(sssp src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
+#                     samples/sssp/sssp_async.cu samples/sssp/sssp_async_opt.cu
+#                     samples/sssp/sssp_host.cpp 
+# 					samples/sssp/main.cpp)
+# target_link_libraries(sssp ${EXTRA_LIBS})
 
-cuda_add_executable(pr src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
-					samples/pr/pr_async.cu samples/pr/pr_async_opt.cu samples/pr/pr_host.cpp 
-					samples/pr/main.cpp)
-target_link_libraries(pr ${EXTRA_LIBS})
+# cuda_add_executable(pr src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
+# 					samples/pr/pr_async.cu samples/pr/pr_async_opt.cu samples/pr/pr_host.cpp 
+# 					samples/pr/main.cpp)
+# target_link_libraries(pr ${EXTRA_LIBS})
 
-cuda_add_executable(pbf samples/pbf/pbf_async.cu samples/pbf/main.cpp)
-target_link_libraries(pbf ${EXTRA_LIBS})
+# cuda_add_executable(pbf samples/pbf/pbf_async.cu samples/pbf/main.cpp)
+# target_link_libraries(pbf ${EXTRA_LIBS})
 
 # FQ
 cuda_add_executable(bfs_rodinia src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp 
@@ -96,10 +96,10 @@ cuda_add_executable(bfs_rodinia src/utils/parser.cpp src/utils/utils.cpp src/gro
 					samples/bfs_rodinia/main.cpp)
 target_link_libraries(bfs_rodinia ${EXTRA_LIBS})
 
-cuda_add_executable(pr_rodinia src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
-					samples/pr_rodinia/pr_async.cu samples/pr_rodinia/pr_async_opt.cu samples/pr_rodinia/pr_host.cpp 
-					samples/pr_rodinia/main.cpp)
-target_link_libraries(pr_rodinia ${EXTRA_LIBS})
+# cuda_add_executable(pr_rodinia src/utils/parser.cpp src/utils/utils.cpp src/groute/graphs/csr_graph.cpp
+# 					samples/pr_rodinia/pr_async.cu samples/pr_rodinia/pr_async_opt.cu samples/pr_rodinia/pr_host.cpp 
+# 					samples/pr_rodinia/main.cpp)
+# target_link_libraries(pr_rodinia ${EXTRA_LIBS})
 
 
 # Unit tests

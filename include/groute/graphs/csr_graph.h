@@ -739,6 +739,49 @@ namespace graphs {
             }
         };
 
+        // Real Locality-aware TB-level partitioning for single GPU
+        // class RealLocAwTBSinglePartitioner : public GraphPartitioner
+        // {
+        //     host::CSRGraph& m_origin_graph;
+        //     int m_nsegs;
+
+        // public:
+        //     RealLocAwTBSinglePartitioner(host::CSRGraph& origin_graph, int nsegs);
+            
+        //     host::CSRGraph& GetOriginGraph() override
+        //     {
+        //         return m_origin_graph;
+        //     }
+            
+        //     host::CSRGraph& GetPartitionedGraph() override
+        //     {
+        //         return m_origin_graph;
+        //     }
+
+        //     void GetSegIndices(
+        //         int seg_idx,
+        //         index_t& seg_snode, index_t& seg_nnodes,
+        //         index_t& seg_sedge, index_t& seg_nedges) const override
+        //     {
+        //         index_t seg_enode, seg_eedge;
+
+        //         seg_nnodes = round_up(m_origin_graph.nnodes, m_nsegs);                      // general nodes seg size
+        //         seg_snode = seg_nnodes * seg_idx;                                           // start node
+        //         seg_nnodes = std::min(m_origin_graph.nnodes - seg_snode, seg_nnodes);       // fix for last seg case
+        //         seg_enode = seg_snode + seg_nnodes;                                         // end node
+        //         seg_sedge = m_origin_graph.row_start[seg_snode];                            // start edge
+        //         seg_eedge = m_origin_graph.row_start[seg_enode];                            // end edge
+        //         seg_nedges = seg_eedge - seg_sedge;  
+        //     }
+            
+        //     bool NeedsReverseLookup() override { return false; }
+
+        //     std::function<index_t(index_t)> GetReverseLookupFunc() override
+        //     {
+        //         return [](index_t idx) { return idx; }; // Just the identity func
+        //     }
+        // };
+
         // (1)
         class MetisPartitioner : public GraphPartitioner
         {
@@ -932,6 +975,54 @@ namespace graphs {
             std::function<index_t(index_t)> GetReverseLookupFunc() override;
         };
 
+        // (8)
+        class TBGraphConstructorWithMETIS : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            TBGraphConstructorWithMETIS(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
+        // (9)
+        class GraphSplitter : public GraphPartitioner
+        {
+            host::CSRGraph& m_origin_graph;
+            host::CSRGraph m_partitioned_graph;
+            std::vector<index_t> m_reverse_lookup;
+            std::vector<index_t> m_seg_offsets;
+            int m_nsegs;
+
+        public:
+            GraphSplitter(host::CSRGraph& origin_graph, int nsegs);
+            
+            host::CSRGraph& GetOriginGraph() override { return m_origin_graph; }
+            host::CSRGraph& GetPartitionedGraph() override { return m_partitioned_graph; }
+
+            void GetSegIndices(
+                int seg_idx,
+                index_t& seg_snode, index_t& seg_nnodes,
+                index_t& seg_sedge, index_t& seg_nedges) const override;
+            
+            bool NeedsReverseLookup() override { return true; }
+            std::function<index_t(index_t)> GetReverseLookupFunc() override;
+        };
+
         // // (1)(3)
         // class MetisPartitionerVWEW_MaxV : public GraphPartitioner
         // {
@@ -1036,14 +1127,14 @@ namespace graphs {
                     {
                         m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<LocalityAwareTBPartitioner>(new LocalityAwareTBPartitioner(host_graph, ngpus));
                     }
-                    // else if (FLAGS_parmode == 7)
-                    // {
-                    //     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerVWEW_MaxV>(new MetisPartitionerVWEW_MaxV(host_graph, ngpus));
-                    // }
-                    // else if (FLAGS_parmode == 8)
-                    // {
-                    //     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<MetisPartitionerVWEW_LCC>(new MetisPartitionerVWEW_LCC(host_graph, ngpus));
-                    // }
+                    else if (FLAGS_parmode == 8)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<TBGraphConstructorWithMETIS>(new TBGraphConstructorWithMETIS(host_graph, ngpus));
+                    }
+                    else if (FLAGS_parmode == 9)
+                    {
+                        m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<GraphSplitter>(new GraphSplitter(host_graph, ngpus));
+                    }
                 }
                 else if (FLAGS_pn_single_mode == 1)
                 {
@@ -1053,6 +1144,10 @@ namespace graphs {
                 {
                     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<LocalityAwareWarpSinglePartitioner>(new LocalityAwareWarpSinglePartitioner(host_graph, ngpus));
                 }
+                // else if (FLAGS_pn_single_mode == 3)
+                // {
+                //     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<RealLocAwTBSinglePartitioner>(new RealLocAwTBSinglePartitioner(host_graph, ngpus));
+                // }
                 else if (FLAGS_pn_single_mode == 0)
                 {
                     m_partitioner = (std::unique_ptr<GraphPartitioner>) std::unique_ptr<RandomPartitioner>(new RandomPartitioner(host_graph, ngpus));

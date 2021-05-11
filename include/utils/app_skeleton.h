@@ -120,12 +120,16 @@ DEFINE_int32(parmode, 1, "Partitioning mode:\n\t"
                          "5: METIS with edge weights (max of endpoints)\n\t"
                          "6: METIS with edge weights (LCC)\n\t"
                          "7: Locality-Aware TB Graph partitioning\n\t"
-                         "8: METIS with v wgt (degree) & e wgt (max)\n\t"
-                         "9: METIS with v wgt (degree) & e wgt (LCC)");
+                         "8: METIS -> 4 GPUs -> METIS -> TBs\n\t"
+                         "9: GraphSplitter\n\t"
+                        //  "9: METIS with v wgt (degree) & e wgt (LCC)"
+                         );
 DEFINE_int32(pn_single_mode, false, "Enable Locality-Aware TB Partitioning for single GPU:\n\t"
                                    "0: no partitioning\n\t"
                                    "1: Locality-aware TB partitioning\n\t"
                                    "2: Locality-aware warp partitioning\n\t");
+DEFINE_bool(sort_by_vdegree, false, "sort vertices by vdegree (TB-level, single GPU)");
+DEFINE_bool(pn_single_vdegree, false, "Enable vertex weight assignment (degree)");
 #else
 DEFINE_bool(pn, false, "[BINARY NOT BUILT WITH METIS] Partition the input graph using METIS (requires a symmetric graph)");
 #endif
